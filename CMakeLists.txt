@@ -14,22 +14,25 @@ find_package(vision_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(image_transport REQUIRED)
 find_package(OpenCV REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
+find_package(tf2_ros REQUIRED)
 
 add_executable(cone_finder src/cone_finder.cpp)
-add_executable(visualize_target src/visualize_target.cpp)
 
 ament_target_dependencies(cone_finder 
+visualization_msgs
 sensor_msgs
+nav_msgs
 vision_msgs
 rclcpp
 std_msgs
-cv_bridge image_transport OpenCV)
-
-ament_target_dependencies(visualize_target 
-sensor_msgs
-vision_msgs
+geometry_msgs
 rclcpp
-std_msgs
+tf2
+tf2_ros
+tf2_geometry_msgs
 cv_bridge image_transport OpenCV)
 
 target_include_directories(cone_finder PUBLIC
@@ -39,15 +42,6 @@ target_compile_features(cone_finder PUBLIC c_std_99 cxx_std_17)  # Require C99 a
 
 install(TARGETS
 cone_finder
-  DESTINATION lib/${PROJECT_NAME})
-
-target_include_directories(visualize_target PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>)
-target_compile_features(visualize_target PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
-
-install(TARGETS
-visualize_target
   DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)
