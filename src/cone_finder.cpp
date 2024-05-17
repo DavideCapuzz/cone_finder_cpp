@@ -40,7 +40,7 @@ ConeFinder::ConeFinder()
     tfBuffer->setCreateTimerInterface(timer_interface);
     listener = std::make_shared<tf2_ros::TransformListener>(*tfBuffer);
     
-    cv::namedWindow("Image window"); 
+    //cv::namedWindow("Image window"); 
 }
 
 ConeFinder::~ConeFinder(){
