@@ -19,8 +19,8 @@ using std::placeholders::_1;
 ConeFinder::ConeFinder()
 : Node("minimal_publisher"), count_(0)
 {
-    sub_image_ = this->create_subscription<sensor_msgs::msg::Image>(
-      "/camera/image_raw", 10, std::bind(&ConeFinder::imageCallBack, this, _1));
+    sub_image_ = this->create_subscription<sensor_msgs::msg::CompressedImage>(
+      "/camera/compressed", 10, std::bind(&ConeFinder::imageCallBack, this, _1));
     sub_cam_info_ = this->create_subscription<sensor_msgs::msg::CameraInfo>(
       "/camera/camera_info", 10, std::bind(&ConeFinder::imageInfo_CB, this, _1));
     sub_costmap_ = this->create_subscription<nav_msgs::msg::OccupancyGrid>(
@@ -185,7 +185,7 @@ void ConeFinder::publishMarker(std::vector<cv::Point> & p_vector)
 }
 
 
-void ConeFinder::imageCallBack(const sensor_msgs::msg::Image::SharedPtr msg_in)
+void ConeFinder::imageCallBack(const sensor_msgs::msg::CompressedImage::SharedPtr msg_in)
 {
     msgs_time_[0] = this->get_clock()->now();
  

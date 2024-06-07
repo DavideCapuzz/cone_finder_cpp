@@ -42,13 +42,13 @@ private:
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr publisher_maker_;
   rclcpp::Publisher<vision_msgs::msg::BoundingBox2DArray>::SharedPtr publisher_BB_;
   
-  rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr sub_image_;
+  rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr sub_image_;
   rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr sub_cam_info_;
   rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr sub_costmap_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr sub_odometry_;
 
   void publishMarker(std::vector<cv::Point> & p_vector);
-  void imageCallBack(const sensor_msgs::msg::Image::SharedPtr msg_in);
+  void imageCallBack(const sensor_msgs::msg::CompressedImage::SharedPtr msg_in);
   void imageInfo_CB(const sensor_msgs::msg::CameraInfo::SharedPtr msg_in);
   void costMapCB(const nav_msgs::msg::OccupancyGrid::SharedPtr msg_in);
   void odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg_in);
