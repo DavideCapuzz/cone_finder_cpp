@@ -351,10 +351,11 @@ bool ConeFinder::test_time(rclcpp::Time (&msgs_time_)[4],rclcpp::Duration max_de
   //to do 
   rclcpp::Time t_ref = this->get_clock()->now();
   for (rclcpp::Time el : msgs_time_)
-  {
+  {/*
     if ((t_ref - el)>max_delta){
       return false;
-    }
+    }*/
+    
   }
   return true;
 }
