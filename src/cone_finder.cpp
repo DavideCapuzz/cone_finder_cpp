@@ -15,6 +15,7 @@
 
 using namespace std::chrono_literals;
 using std::placeholders::_1;
+using std::placeholders::_2;
 
 ConeFinder::ConeFinder()
 : Node("minimal_publisher"), count_(0)
@@ -39,6 +40,8 @@ ConeFinder::ConeFinder()
         get_node_timers_interface());
     tfBuffer->setCreateTimerInterface(timer_interface);
     listener = std::make_shared<tf2_ros::TransformListener>(*tfBuffer);
+    service_ = this->create_service<tools_nav::srv::GetTarget>(
+      "/get_cone_pos", std::bind(&ConeFinder::get_cone_server, this, _1, _2));
     
     //cv::namedWindow("Image window"); 
 }
@@ -98,6 +101,7 @@ void ConeFinder::costMapCB(const nav_msgs::msg::OccupancyGrid::SharedPtr msg_in)
             findNearestPoint(p_100, Cam_pos, cv::Point(p_front.x * cone + p_front.x, 500)));
         }      
         publishMarker(p_nearest);
+        p_nearest_ =p_nearest;
       }
       /*
       cv::line (c_mat_image, Cam_pos,p_front, cv::Vec3b(255,0,255), 1);
@@ -393,6 +397,25 @@ void ConeFinder::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg_in)
     return;
   } 
   
+}
+
+void ConeFinder::get_cone_server(const std::shared_ptr<tools_nav::srv::GetTarget::Request> request,
+          std::shared_ptr<tools_nav::srv::GetTarget::Response>  response)
+{
+  if (p_nearest_.size()>0)
+  {
+    RCLCPP_INFO(this->get_logger(), " founded !!");
+    response->result=true;
+    response->target.x=p_nearest_[0].x * map_res_ + map_x0_;
+    response->target.y=p_nearest_[0].y * map_res_ + map_y0_;
+  }
+  else{
+    RCLCPP_INFO(this->get_logger(), " NOT founded !!");
+    response->result=false;
+    response->target.x=0;
+    response->target.y=0;
+  }
+  response->type.data="Cone";
 }
 
 void ConeFinder::get_map_indices(float x, float y, int& ix, int& iy)

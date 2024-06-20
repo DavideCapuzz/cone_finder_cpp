@@ -17,6 +17,7 @@
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <geometry_msgs/msg/pose2_d.hpp>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+#include "tools_nav/srv/get_target.hpp"
 
 // next steps 
 // reoreder style
@@ -47,6 +48,8 @@ private:
   rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr sub_costmap_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr sub_odometry_;
 
+  rclcpp::Service<tools_nav::srv::GetTarget>::SharedPtr service_;
+
   void publishMarker(std::vector<cv::Point> & p_vector);
   void imageCallBack(const sensor_msgs::msg::CompressedImage::SharedPtr msg_in);
   void imageInfo_CB(const sensor_msgs::msg::CameraInfo::SharedPtr msg_in);
@@ -58,6 +61,9 @@ private:
   double distancePointToLine(cv::Point P, double m, double q);
   bool test_time(rclcpp::Time (&msgs_time_)[4],rclcpp::Duration max_delta);
   bool pointingUp(std::vector<cv::Point> hull_in);
+
+  void get_cone_server(const std::shared_ptr<tools_nav::srv::GetTarget::Request> request,
+          std::shared_ptr<tools_nav::srv::GetTarget::Response> response);
 
   std::shared_ptr<tf2_ros::Buffer> tfBuffer;  
   
@@ -75,6 +81,7 @@ private:
   float rotation_angle_{0.0};
 
   rclcpp::Time msgs_time_[4];
+  std::vector<cv::Point> p_nearest_;
   // 0 sub_image_
   // 1 sub_cam_info_
   // 2 sub_costmap_
