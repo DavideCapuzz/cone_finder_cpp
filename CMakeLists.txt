@@ -22,8 +22,23 @@ find_package(geometry_msgs REQUIRED)
 find_package(tools_nav REQUIRED)
 
 add_executable(cone_finder src/cone_finder.cpp)
+add_executable(search_target src/search_target.cpp)
 
 ament_target_dependencies(cone_finder 
+visualization_msgs
+sensor_msgs
+nav_msgs
+vision_msgs
+rclcpp
+std_msgs
+geometry_msgs
+tf2
+tf2_ros
+tf2_geometry_msgs
+tools_nav
+cv_bridge image_transport OpenCV)
+
+ament_target_dependencies(search_target 
 visualization_msgs
 sensor_msgs
 nav_msgs
@@ -42,8 +57,14 @@ target_include_directories(cone_finder PUBLIC
   $<INSTALL_INTERFACE:include>)
 target_compile_features(cone_finder PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
 
+target_include_directories(search_target PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>)
+target_compile_features(search_target PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
+
 install(TARGETS
 cone_finder
+search_target
   DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)

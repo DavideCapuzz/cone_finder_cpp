@@ -18,7 +18,7 @@ using std::placeholders::_1;
 using std::placeholders::_2;
 
 ConeFinder::ConeFinder()
-: Node("minimal_publisher"), count_(0)
+: Node("cone_finder"), count_(0)
 {
     sub_image_ = this->create_subscription<sensor_msgs::msg::CompressedImage>(
       "/camera/compressed", 10, std::bind(&ConeFinder::imageCallBack, this, _1));
@@ -379,7 +379,7 @@ void ConeFinder::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg_in)
   geometry_msgs::msg::TransformStamped transformCamera;
   
   try{
-    transformCamera = tfBuffer->lookupTransform("map", "vehicle/Camera/Camera", rclcpp::Time(0) );
+    transformCamera = tfBuffer->lookupTransform("map", "cam_frame", rclcpp::Time(0) );
     geometry_msgs::msg::Pose bot_camera{};
     bot_camera.position.x = 0;
     bot_camera.position.y = 0;
