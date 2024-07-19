@@ -38,81 +38,139 @@ SearchTarget::SearchTarget()
     service_ = this->create_service<tools_nav::srv::GetTarget>(
       "/get_trg_fnd_pos", std::bind(&SearchTarget::get_search_target_server, this, _1, _2));
     
-    cv::namedWindow("Image window"); 
+    this->declare_parameter("dev_mode_", false);
+    this->declare_parameter("distance_wall_", 0.5);
+
+    dev_mode_ = this->get_parameter("dev_mode_").as_bool();
+    distance_wall_ = this->get_parameter("distance_wall_").as_double();
+    RCLCPP_INFO(this->get_logger(), "dev_mode  %d",dev_mode_ );
+
+    if (dev_mode_)
+    {
+      cv::namedWindow("Image window"); 
+    }    
     RCLCPP_INFO(this->get_logger(), "start search target");
+
+
 }
 
 SearchTarget::~SearchTarget(){
-  cv::destroyWindow("Image window");
+  if (dev_mode_)
+  {
+    cv::destroyWindow("Image window");
+  }
 }
 
 
 void SearchTarget::costMapCB(const nav_msgs::msg::OccupancyGrid::SharedPtr msg_in)
 {
-    // https://docs.ros2.org/foxy/api/nav_msgs/msg/MapMetaData.html
     nav_msgs::msg::OccupancyGrid occupancyGrid = *msg_in;
+    // get map resolution and and position
     map_res_ = occupancyGrid.info.resolution;
     map_x0_ = occupancyGrid.info.origin.position.x;
     map_y0_ = occupancyGrid.info.origin.position.y;
+
+    // check if the messages is update
     msgs_time_[2] = this->get_clock()->now();
-    if (test_time(msgs_time_,rclcpp::Duration(1,0)))
+    if (test_time(msgs_time_,rclcpp::Duration(1, 0)))
     {
-      //RCLCPP_INFO(this->get_logger(), " length  %d %d %f %d", occupancyGrid.info.width, occupancyGrid.info.height,occupancyGrid.info.resolution, sizeof(occupancyGrid.data[1]), sizeof(occupancyGrid.data[0]));
-      count_=0;
       cv::Mat c_mat_image = cv::Mat::zeros(occupancyGrid.info.height, occupancyGrid.info.width, CV_8UC3);
       cv::Mat c_mat_walls = cv::Mat::zeros(occupancyGrid.info.height, occupancyGrid.info.width, CV_8UC3);
+
+      // create image occupancy grid gray scale to fine countours
       cv::Mat c_mat_walls_gray = cv::Mat::zeros(occupancyGrid.info.height, occupancyGrid.info.width, CV_8UC3);
       c_mat_image.setTo(cv::Scalar(255, 255, 255));
       c_mat_walls.setTo(cv::Scalar(255, 255, 255));
+
       std::vector<cv::Point> p_100;
+
+      // extract from the message cost map the xy of the points
       for (u_int i{0}; i < occupancyGrid.info.width*occupancyGrid.info.height; i++)
       {
           if (occupancyGrid.data[i]!=0)
           {
-            cv::Point p = cv::Point(u_int{i%occupancyGrid.info.width},u_int{i/occupancyGrid.info.height});
-            if (occupancyGrid.data[i]==100)
+            cv::Point p = cv::Point(u_int{i % occupancyGrid.info.width}, occupancyGrid.info.height - u_int{i / occupancyGrid.info.height});
+            if (occupancyGrid.data[i] == 100)
             {
-              c_mat_image.at<cv::Vec3b>(p)=cv::Vec3b(0,0,255);
-              c_mat_walls.at<cv::Vec3b>(p)=cv::Vec3b(0,0,0);
+              if (dev_mode_)
+              {
+                c_mat_image.at<cv::Vec3b>(p) = cv::Vec3b(0, 0, 255);
+                c_mat_walls.at<cv::Vec3b>(p) = cv::Vec3b(0, 0, 0);
+              }              
               p_100.push_back(p);
             }
             else
             {
-              //c_mat_image.at<cv::Vec3b>(p)=cv::Vec3b(0,255,0);
+              // c_mat_image.at<cv::Vec3b>(p)=cv::Vec3b(0,255,0);
             }
           }
       }
-      // find camera position inside the costmap
-
       
-      
-      cv::Point Cam_pos = cv::Point(r_bot_,c_bot_);
-      //find the closet point to the right
-      cv::Point p_front = rotatePointOnImage(cv::Point(r_bot_,500), Cam_pos, rotation_angle_+90);
-      //get the angle of the camera position and rotate the point for the line
-      std::vector<cv::Point> p_nearest;
-      std::vector<std::vector<cv::Point>> l_nearest;
-      cv::cvtColor( c_mat_walls, c_mat_walls_gray, cv::COLOR_BGR2GRAY );
-      if (p_100.size()>0)
+      // find camera position inside the costmap     
+      cv::Point bot_pos = cv::Point(r_bot_, c_bot_);
+      // find the closet point to the right
+      cv::Point p_lateral = rotatePointOnImage(cv::Point(r_bot_, 500), bot_pos, rotation_angle_ - 90);
+      cv::Point p_front = rotatePointOnImage(cv::Point(r_bot_, 5), bot_pos, rotation_angle_);
+      RCLCPP_INFO(this->get_logger(), "%d, %d %d %f ", bot_pos.x, bot_pos.y, p_lateral.x, p_lateral.y);
+      // get the angle of the camera position and rotate the point for the line
+      std::vector<cv::Point> closest_line;
+      cv::Point closest_point;
+      cv::cvtColor(c_mat_walls, c_mat_walls_gray, cv::COLOR_BGR2GRAY);
+      if (p_100.size() > 0)
       {
         std::vector<std::vector<cv::Point>> contours;
         std::vector<cv::Vec4i> hierarchy;
-        cv::findContours( c_mat_walls_gray, contours, hierarchy, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE );
-        int i =0;
+        cv::findContours(c_mat_walls_gray, contours, hierarchy, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE );
+        int i{0};
+        int idx_cont{0};
+        double min_distance_line{std::numeric_limits<double>::max()};
+        double min_distance_robot{std::numeric_limits<double>::max()};
         for (std::vector<cv::Point> singel_line : contours)
         {
-          cv::Point closest_point;
-          double min_distance=5;
-          findNearestPoint(closest_point,min_distance, singel_line, Cam_pos, p_front);
-          //RCLCPP_INFO(this->get_logger(), "%d, %d %d %f ",i, closest_point.x, closest_point.y, min_distance);
-
-          if (closest_point.x!=0 &&closest_point.y!=0 )
+          cv::Point cp;
+          double distance;
+          findNearestPointToSegment2(cp, distance, singel_line, bot_pos, p_lateral);
+          RCLCPP_INFO(this->get_logger(), "%d, %d %d %f ", i, cp.x, cp.y, distance);
+          double d_robot = distancePoints(cp, bot_pos);
+          if ((min_distance_line > distance) && (min_distance_robot > d_robot) && (cp.x != 0 && cp.y != 0) && (singel_line.size() !=0))
           {
-              p_nearest.push_back(closest_point);
-              l_nearest.push_back(singel_line);
+            closest_line = singel_line;
+            min_distance_line = distance;
+            idx_cont = i;
           }
           i++;
-        }      
+        }
+        
+        if (dev_mode_)
+        {
+          RCLCPP_INFO(this->get_logger(), "indx line  %d", idx_cont);
+          RCLCPP_INFO(this->get_logger(), "%ld", closest_line.size());
+          cv::drawContours( c_mat_image, contours, idx_cont, cv::Vec3b(250,0,0), 2, cv::LINE_8, 0, 0);
+        }        
+        
+        int last_idx = closest_line.size()-1;
+        cv::Point far_point = closest_line[last_idx];
+        cv::Point p_t1{};
+        cv::Point p_t2{};
+        if (distancePoints(p_front, far_point) > distancePoints(bot_pos, far_point))
+        {
+          p_t1 = closest_line[0];
+          p_t2 = closest_line[2];
+        } else {
+          p_t1 = closest_line[last_idx];
+          p_t2 = closest_line[last_idx-2];
+        }
+        
+        
+        if (dev_mode_)
+        {
+          c_mat_image.at<cv::Vec3b>(cv::Point(p_t1.x + 4,occupancyGrid.info.height - p_t1.y)) = cv::Vec3b(0,255,0); 
+        }
+        //RCLCPP_INFO(this->get_logger(), "%d, %d %d %f ",i, far_point.x, far_point.y, last_idx);
+
+        // non funziona 
+        cv::Point p_t3 = findPointsAtDistanceX2(p_t1, p_t2, distance_wall_, bot_pos);
+        p_target_=cv::Point(p_t3.x,occupancyGrid.info.height - p_t3.y);    
       }
       //RCLCPP_INFO(this->get_logger(), "%d",l_nearest.size());
       /*
@@ -124,29 +182,89 @@ void SearchTarget::costMapCB(const nav_msgs::msg::OccupancyGrid::SharedPtr msg_i
         }
       }
       */
-      for( size_t i = 0; i< l_nearest.size(); i++ )
-      {
-        cv::drawContours( c_mat_image, l_nearest, (int)i, cv::Vec3b(250,0,0), 2, cv::LINE_8, 0, 0 );
-        RCLCPP_INFO(this->get_logger(), "%d",l_nearest[i].size());
-        //c_mat_image.at<cv::Vec3b>(l_nearest[i][0])=cv::Vec3b(0,255,0);
-        int last_idx = l_nearest[i].size()-1;
-        //c_mat_image.at<cv::Vec3b>(l_nearest[i][last_idx]) = cv::Vec3b(0,255,0);
-        cv::Point far_point = l_nearest[i][last_idx];
-        //c_mat_image.at<cv::Vec3b>(far_point) = cv::Vec3b(0,255,0);
-        //c_mat_image.at<cv::Vec3b>(cv::Point(far_point.x +4,far_point.y)) = cv::Vec3b(0,255,0); 
-        //RCLCPP_INFO(this->get_logger(), "%d, %d %d %f ",i, far_point.x, far_point.y, last_idx);
-        p_target_=cv::Point(far_point.x +4,far_point.y);
-      }
+      std::vector<cv::Point> pp;
+      pp.push_back(p_target_);
+      publishMarker(pp);
 
       //find the final point of the closest point 
       
       //find the perpendicular point to the closet point
+      if (dev_mode_)
+      {
+        cv::line (c_mat_image, bot_pos, p_lateral, cv::Vec3b(255,0,255), 1);
+        cv::line (c_mat_image, bot_pos, p_lateral, 4);
+        cv::imshow("Image window", c_mat_image);
       
-      //cv::line (c_mat_image, Cam_pos,p_front, cv::Vec3b(255,0,255), 1);
-      //cv::line (c_mat_image, Cam_pos,p_front, 4);
-      //cv::imshow("Image window", c_mat_image);
+        cv::waitKey(3);
+      }
       
-      //cv::waitKey(3);
+    }
+}
+
+cv::Point SearchTarget::findPointsAtDistanceX(const cv::Point& A, const cv::Point& B, double x, const cv::Point& Pbot) {
+    // Calculate the distance between A and B
+    double d = distancePoints(A, B);
+
+    // Check if the distance is possible
+    if (d > 2 * x) {
+        throw std::runtime_error("No such point exists.");
+    }
+
+    // Calculate the midpoint between A and B
+    double mid_x = (A.x + B.x) / 2;
+    double mid_y = (A.y + B.y) / 2;
+
+    // Calculate the half distance along the line joining A and B
+    double h = std::sqrt(x * x - (d / 2) * (d / 2));
+
+    // Calculate the unit vector along the line joining A and B
+    double ux = (B.x - A.x) / d;
+    double uy = (B.y - A.y) / d;
+
+    // Calculate the unit vector perpendicular to the line joining A and B
+    double vx = -uy;
+    double vy = ux;
+
+    // Calculate the intersection points
+    cv::Point P1 = { mid_x + h * vx, mid_y + h * vy };
+    cv::Point P2 = { mid_x - h * vx, mid_y - h * vy };
+
+    if (distancePoints(Pbot, P1) > distancePoints(Pbot, P2))
+    {
+      return P2;
+    } else {
+      return P1;
+    }
+}
+
+cv::Point SearchTarget::findPointsAtDistanceX2(const cv::Point& A, const cv::Point& B, double d, const cv::Point& Pbot) {
+    // Calculate the midpoint between A and B
+    double mid_x = (A.x + B.x) / 2;
+    double mid_y = (A.y + B.y) / 2;
+
+    double m{0.0};
+    if ((B.x - A.x)!=0)
+    {
+      m = - (B.y - A.y) / (B.x - A.x);
+    }
+
+    double q = mid_y - m * mid_x;
+    double b = 2 * (mid_x - m * (mid_y - q));
+    double c = std::pow(mid_x,2) - std::pow(d, 2) + std::pow(mid_y - q, 2);
+
+    cv::Point P1{};
+    cv::Point P2{};
+    P1.x = (b + std::sqrt(std::pow(b, 2) - 4*c)) / 2;
+    P2.x = (b - std::sqrt(std::pow(b, 2) - 4*c)) / 2;
+
+    P1.y = m * P1.x + q;
+    P2.y = m * P2.x + q;
+
+    if (distancePoints(Pbot, P1) > distancePoints(Pbot, P2))
+    {
+      return P2;
+    } else {
+      return P1;
     }
 }
 
@@ -165,8 +283,61 @@ double SearchTarget::distancePointToLine(cv::Point P, double m, double q) {
     return std::abs(m * P.x - P.y + q) / std::sqrt(m * m + 1);
 }
 
+double SearchTarget::distancePoints(cv::Point P1, cv::Point P0) {
+    return std::sqrt((P1.x - P0.x) * (P1.x - P0.x) + (P1.y - P0.y) * (P1.y - P0.y));
+}
+
 // Trova il punto nel set con la minima distanza dalla retta
-void SearchTarget::findNearestPoint(cv::Point& nearestPoint, double& min_distance, std::vector<cv::Point>& points, cv::Point P1, cv::Point P2) {
+void SearchTarget::findNearestPointToSegment(cv::Point& nearestPoint, double& min_distance, std::vector<cv::Point>& points, cv::Point P1, cv::Point P2) {
+   min_distance = 10000000;
+   // https://en.wikipedia.org/wiki/Distance_from_a_point_to_a_line
+   double A = P2.y - P1.y;
+   double B = P2.x - P1.x;
+   double C = P2.x*P1.y - P2.y*P1.x;
+   double den = std::sqrt(std::pow(B, 2) + std::pow(A, 2));
+   for (const auto& point : points) {
+        double distance = std::abs(A*point.x - B*point.y + C)/den;
+        if (distance < min_distance) {
+            min_distance = distance;
+            nearestPoint = point;
+        }
+    }
+   
+}
+
+void SearchTarget::closestPointOnSegment(cv::Point& cp, double& dist, cv::Point P0, cv::Point P1, cv::Point P2)
+{
+  cv::Point AB = P2 - P1;
+  cv::Point AP = P0 - P1;
+  double ab2 = AB.dot(AB);
+  double ap_ab = AP.dot(AB);
+  double t = ap_ab / ab2;
+
+  // Clamp t to the range [0, 1]
+  t = std::max(0.0, std::min(1.0, t));
+
+  // Compute the closest point
+  cp = P1 + AB * t;
+
+  // Calculate the distance between P and the closest point
+  dist = distancePoints(cp, P0);
+}
+
+void SearchTarget::findNearestPointToSegment2(cv::Point& nearestPoint, double& min_distance, std::vector<cv::Point>& points, cv::Point P1, cv::Point P2) {
+   min_distance = std::numeric_limits<double>::max();
+   // https://en.wikipedia.org/wiki/Distance_from_a_point_to_a_line
+   double distance;
+   cv::Point cp;
+   for (const auto& point : points) {
+        closestPointOnSegment(cp, distance, point, P1, P2);
+        if (distance < min_distance) {
+            min_distance = distance;
+            nearestPoint = point;
+        }
+    }   
+}
+
+void SearchTarget::findNearestPointToLine(cv::Point& nearestPoint, double& min_distance, std::vector<cv::Point>& points, cv::Point P1, cv::Point P2) {
     // Calcola la pendenza della retta
     double m{0.0};
     if ((P2.x - P1.x)!=0)
@@ -178,6 +349,7 @@ void SearchTarget::findNearestPoint(cv::Point& nearestPoint, double& min_distanc
     // Inizializza la distanza minima e il punto corrispondente
     //double minDistance = std::numeric_limits<double>::max();
     // Scansiona tutti i punti nel set e trova il punto con la minima distanza
+    min_distance = 10000000;
     for (const auto& point : points) {
         double distance = distancePointToLine(point, m, q);
         if (distance < min_distance) {

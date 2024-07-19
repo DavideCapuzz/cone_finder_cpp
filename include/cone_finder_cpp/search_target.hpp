@@ -19,15 +19,8 @@
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include "tools_nav/srv/get_target.hpp"
 
-// next steps 
-// reoreder style
-// remove overlap cones
-// send bounding box
-// send point message
-
-
-#ifndef ConeFinder_H
-#define ConeFinder_H
+#ifndef SearchTarget_H
+#define SearchTarget_H
 
 class SearchTarget: public rclcpp::Node
 {
@@ -52,7 +45,14 @@ private:
   void odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg_in);
   void get_map_indices(float x, float y, int& ix, int& iy);
   cv::Point rotatePointOnImage(const cv::Point& given_pt, const cv::Point& ref_pt, const double& angle_deg);
-  void findNearestPoint(cv::Point& nearestPoint, double& min_distance, std::vector<cv::Point>& points, cv::Point P1, cv::Point P2);
+  void findNearestPointToLine(cv::Point& nearestPoint, double& min_distance, std::vector<cv::Point>& points, cv::Point P1, cv::Point P2);
+  void findNearestPointToSegment(cv::Point& nearestPoint, double& min_distance, std::vector<cv::Point>& points, cv::Point P1, cv::Point P2);
+  void findNearestPointToSegment2(cv::Point& nearestPoint, double& min_distance, std::vector<cv::Point>& points, cv::Point P1, cv::Point P2);
+  void closestPointOnSegment(cv::Point& nearestPoint, double& min_distance, cv::Point P0, cv::Point P1, cv::Point P2);
+  double distancePoints(cv::Point P1, cv::Point P0);
+  cv::Point findPointsAtDistanceX(const cv::Point& A, const cv::Point& B, double x, const cv::Point& Pbot);
+  cv::Point findPointsAtDistanceX2(const cv::Point& A, const cv::Point& B, double d, const cv::Point& Pbot);
+
   double distancePointToLine(cv::Point P, double m, double q);
   bool test_time(rclcpp::Time (&msgs_time_)[4],rclcpp::Duration max_delta);
 
@@ -76,11 +76,9 @@ private:
 
   rclcpp::Time msgs_time_[4];
   cv::Point p_target_;
-  // 0 sub_image_
-  // 1 sub_cam_info_
-  // 2 sub_costmap_
-  // 3 sub_odometry_
 
+  bool dev_mode_{false};  // if enable visualize image map
+  double distance_wall_{0.5};
 };
 
 #endif
