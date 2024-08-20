@@ -1,4 +1,8 @@
+#include <array>
+#include <cmath>
+#include <iostream>
 #include <vector>
+
 #include <image_transport/image_transport.hpp> // Using image_transport allows us to publish and subscribe to compressed image streams in ROS2
 #include <opencv2/opencv.hpp> // We include everything about OpenCV as we don't care much about compilation time at the moment.
 
@@ -17,10 +21,194 @@
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <geometry_msgs/msg/pose2_d.hpp>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
-#include "tools_nav/srv/get_target.hpp"
+#include "interfaces/srv/get_target.hpp"
+
+#include "cone_finder_cpp/tools.hpp"
 
 #ifndef SearchTarget_H
 #define SearchTarget_H
+
+template <int Size>
+class Kernel {
+   public:
+    using Row = std::array<double, Size>;
+    using Matrix = std::array<Row, Size>;
+
+    class MatrixAngle {
+        Matrix matrix_;
+        double angle_;
+
+       public:
+        MatrixAngle(Matrix&& matrix, double angle)
+            : matrix_{std::move(matrix)}, angle_{angle} {}
+
+        Row& operator[](std::size_t idx) { return matrix_[idx]; }
+        const Row& operator[](std::size_t idx) const { return matrix_[idx]; }
+
+        void printMatrix() const {
+            for (auto const& row : matrix_) {
+                for (auto const val : row) {
+                    std::cout << val << "\t";
+                }
+                std::cout << '\n';
+            }
+        }
+        void printAngle() const { std::cout << angle_ << '\n'; }
+    };
+
+   private:
+    MatrixAngle kernel_;
+    MatrixAngle kernel_original_;
+
+    int class_;
+    bool debug{false};
+    static constexpr double fraction_{45.0};
+
+   public:
+    Kernel(Matrix&& matrix, double ang)
+        : kernel_{std::move(matrix), fmod(ang, 360.0 - 22.5)},
+          kernel_original_{kernel_},
+          class_{get_class(ang)} {
+        if (debug) {
+            std::cout << "class " << class_ << '\n';
+        }
+    }
+
+    void print_mat() const { kernel_.printMatrix(); }
+    void print_ang() const { kernel_.printAngle(); }
+    void print_original_mat() const { kernel_original_.printMatrix(); }
+    void print_original_angle() const { kernel_original_.printAngle(); }
+
+    void set_angle(double ang) {
+        if (get_class(ang) != class_) {
+            class_ = get_class(ang);
+            shift(class_);
+            if (debug) {
+                std::cout << "new class " << class_ << '\n';
+            }
+        } else {
+            if (debug) {
+                std::cout << "old class " << class_ << '\n';
+            }
+        }
+    }
+
+    void flip()
+    {
+        for (int i = 0; i < (Size-1)/2; i++) {
+            for (int j = 0; j < Size; j++) {
+                double a = kernel_original_[i][j];
+                kernel_original_[i][j] = kernel_original_[Size-i-1][j];
+                kernel_original_[Size-i-1][j] = a;
+            }
+        }
+    }
+
+    auto get_class(double ang) {
+        return static_cast<int>(fmod(ang, 360.0 - 22.5) / fraction_);
+    }
+
+    std::tuple<bool, int, int> evalute_next_point(const Matrix& matrix) {
+        double max_value{0.0};
+        bool found{false};
+        int i_out{0};
+        int j_out{0};
+        for (int i = 0; i < Size; i++) {
+            for (int j = 0; j < Size; j++) {
+                if (kernel_[i][j] * matrix[i][j] > max_value) {
+                    max_value = kernel_[i][j] * matrix[i][j];
+                    i_out = i;
+                    j_out = j;
+                    found = true;
+                }
+            }
+        }
+        // Packing values to return a tuple
+        return std::make_tuple(found, i_out, j_out);
+    }
+
+    void shift(int shift) {
+        std::vector<double> a;
+        for (int i = 0; i < static_cast<int>(Size / 2); i++) {
+            for (int j = i; j < Size - i; j++) {
+                a.push_back(kernel_original_[i][j]);
+                if (debug) {
+                    std::cout << i << "\t" << j << "\t"
+                              << kernel_original_[i][j] << '\n';
+                }
+            }
+            for (int j = i + 1; j < Size - i - 1; j++) {
+                a.push_back(kernel_original_[j][Size - i - 1]);
+                if (debug) {
+                    std::cout << j << "\t" << Size - i - 1 << "\t"
+                              << kernel_original_[j][Size - i - 1] << '\n';
+                }
+            }
+            for (int j = Size - i - 1; j >= i; j--) {
+                a.push_back(kernel_original_[Size - i - 1][j]);
+                if (debug) {
+                    std::cout << Size - i - 1 << "\t" << j << "\t"
+                              << kernel_original_[Size - i - 1][j] << '\n';
+                }
+            }
+            for (int j = Size - i - 1; j > i; j--) {
+                a.push_back(kernel_original_[j][i]);
+                if (debug) {
+                    std::cout << j << "\t" << i << "\t"
+                              << kernel_original_[j][i] << '\n';
+                }
+            }
+            if (debug) {
+                std::cout << "oh1 "
+                          << (static_cast<int>((Size) / 2) - i) * shift << '\n';
+            }
+            for (int j = 0; j < (static_cast<int>((Size) / 2) - i) * shift;
+                 j++) {
+                double el = a.back();
+                a.insert(a.begin(), el);
+                a.pop_back();
+                if (debug) {
+                    std::cout << el << '\n';
+                }
+            }
+            if (debug) {
+                std::cout << "oh2" << '\n';
+            }
+            for (int j = i; j < Size - i; j++) {
+                kernel_[i][j] = a.front();
+                a.erase(a.begin());
+                if (debug) {
+                    std::cout << i << "\t" << j << "\t" << kernel_[i][j]
+                              << '\n';
+                }
+            }
+            for (int j = i + 1; j < Size - i - 1; j++) {
+                kernel_[j][Size - i - 1] = a.front();
+                a.erase(a.begin());
+                if (debug) {
+                    std::cout << j << "\t" << Size - i - 1 << "\t"
+                              << kernel_[j][Size - i - 1] << '\n';
+                }
+            }
+            for (int j = Size - i - 1; j >= i; j--) {
+                kernel_[Size - i - 1][j] = a.front();
+                a.erase(a.begin());
+                if (debug) {
+                    std::cout << Size - i - 1 << "\t" << j << "\t"
+                              << kernel_[Size - i - 1][j] << '\n';
+                }
+            }
+            for (int j = Size - i - 1; j > i; j--) {
+                kernel_[j][i] = a.front();
+                a.erase(a.begin());
+                if (debug) {
+                    std::cout << j << "\t" << i << "\t" << kernel_[j][i]
+                              << '\n';
+                }
+            }
+        }
+    }
+};
 
 class SearchTarget: public rclcpp::Node
 {
@@ -29,56 +217,59 @@ public:
 	~SearchTarget();
 
 private:
-  void timer_callback();
-  rclcpp::TimerBase::SharedPtr timer_;
-
-  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr publisher_maker_;
-  rclcpp::Publisher<vision_msgs::msg::BoundingBox2DArray>::SharedPtr publisher_BB_;
+  // ros interface
+  std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
+  std::shared_ptr<tf2_ros::TransformListener> listener_;
 
   rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr sub_costmap_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr sub_odometry_;
 
-  rclcpp::Service<tools_nav::srv::GetTarget>::SharedPtr service_;
+  rclcpp::Service<interfaces::srv::GetTarget>::SharedPtr service_;
 
-  void publishMarker(std::vector<cv::Point> & p_vector);
-  void costMapCB(const nav_msgs::msg::OccupancyGrid::SharedPtr msg_in);
-  void odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg_in);
-  void get_map_indices(float x, float y, int& ix, int& iy);
-  cv::Point rotatePointOnImage(const cv::Point& given_pt, const cv::Point& ref_pt, const double& angle_deg);
-  void findNearestPointToLine(cv::Point& nearestPoint, double& min_distance, std::vector<cv::Point>& points, cv::Point P1, cv::Point P2);
-  void findNearestPointToSegment(cv::Point& nearestPoint, double& min_distance, std::vector<cv::Point>& points, cv::Point P1, cv::Point P2);
-  void findNearestPointToSegment2(cv::Point& nearestPoint, double& min_distance, std::vector<cv::Point>& points, cv::Point P1, cv::Point P2);
-  void closestPointOnSegment(cv::Point& nearestPoint, double& min_distance, cv::Point P0, cv::Point P1, cv::Point P2);
-  double distancePoints(cv::Point P1, cv::Point P0);
-  cv::Point findPointsAtDistanceX(const cv::Point& A, const cv::Point& B, double x, const cv::Point& Pbot);
-  cv::Point findPointsAtDistanceX2(const cv::Point& A, const cv::Point& B, double d, const cv::Point& Pbot);
+  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr publisher_maker_;
+  rclcpp::Publisher<vision_msgs::msg::BoundingBox2DArray>::SharedPtr publisher_BB_;
 
-  double distancePointToLine(cv::Point P, double m, double q);
-  bool test_time(rclcpp::Time (&msgs_time_)[4],rclcpp::Duration max_delta);
+  // input callback
+  void costmap_cb(const nav_msgs::msg::OccupancyGrid::SharedPtr msg_in);
+  void costmap_cb_old(const nav_msgs::msg::OccupancyGrid::SharedPtr msg_in);
+  void odom_cb(const nav_msgs::msg::Odometry::SharedPtr msg_in); 
 
-  void get_search_target_server(const std::shared_ptr<tools_nav::srv::GetTarget::Request> request,
-          std::shared_ptr<tools_nav::srv::GetTarget::Response> response);
+  void get_search_target_server(const std::shared_ptr<interfaces::srv::GetTarget::Request> request,
+          std::shared_ptr<interfaces::srv::GetTarget::Response> response);
 
-  std::shared_ptr<tf2_ros::Buffer> tfBuffer;  
+  // internal functions
+ void publish_marker(std::vector<geometry_msgs::msg::Point> & p_vector);
+
+  // input
+  float map_x0_{}, map_y0_{}, map_res_{};
+  geometry_msgs::msg::Pose bot_pose_{}, goal_pose_{};
   
-  std::vector<cv::Point> cone_coords_;
-  std::vector<double> cone_x_;
-  size_t count_;
-  std::mutex mtx_fnc_; 
-  sensor_msgs::msg::CameraInfo camera_info_;
-  float map_x0_, map_y0_, map_res_;
-  geometry_msgs::msg::Pose bot_pose_, goal_pose_;
-  std::shared_ptr<tf2_ros::TransformListener> listener;
-    
-  int r_bot_{0}; // = boost::math::iround(-yg);
-	int c_bot_{0}; // = boost::math::iround(xg);
-  float rotation_angle_{0.0};
+  
+  int r_bot_{0};                  // row the base link of the robot
+	int c_bot_{0};                  // column the base link of the robot
+  float rotation_angle_{0.0};     // heading of the robot
 
-  rclcpp::Time msgs_time_[4];
-  cv::Point p_target_;
+  // internal data
+  ToolsCam tools_{};              // tools cone finder node 
+  rclcpp::Time msgs_time_[4];     // test to chech if all the messages has been updated
 
-  bool dev_mode_{false};  // if enable visualize image map
-  double distance_wall_{0.5};
+  // output
+  geometry_msgs::msg::Point p_target_{};          // next target point
+
+  // parameters 
+  int dev_mode_{0};               // dev level 0 - 3
+  double distance_wall_{10};      // parameter of the algorithm
+  int search_dir_{1};             // 1 right, -1 left direction of research
+
+  Kernel<5> kernel_{
+    {0.0, 0.0, 0.25, 0.22, 0.31, 
+    0.0,  0.0, 0.3, 0.28, 0.32, 
+    0.0,  0.0, 0.0, 0.7, 1,
+    0.0,  0.0, 0.55, 0.45, 0.5,
+    0.0, 0.0,  0.65, 0.35, 0.4},
+        0};
+
 };
 
 #endif
+

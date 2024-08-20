@@ -20,9 +20,10 @@ find_package(tf2_geometry_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(tools_nav REQUIRED)
+find_package(interfaces REQUIRED)
 
-add_executable(cone_finder src/cone_finder.cpp)
-add_executable(search_target src/search_target.cpp)
+add_executable(cone_finder src/cone_finder.cpp src/tools.cpp)
+add_executable(search_target src/search_target.cpp src/tools.cpp)
 
 ament_target_dependencies(cone_finder 
 visualization_msgs
@@ -36,6 +37,7 @@ tf2
 tf2_ros
 tf2_geometry_msgs
 tools_nav
+interfaces
 cv_bridge image_transport OpenCV)
 
 ament_target_dependencies(search_target 
@@ -50,6 +52,7 @@ tf2
 tf2_ros
 tf2_geometry_msgs
 tools_nav
+interfaces
 cv_bridge image_transport OpenCV)
 
 target_include_directories(cone_finder PUBLIC

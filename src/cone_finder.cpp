@@ -4,7 +4,8 @@
 #include <string>
 #include <vector>
 
-#include "cone_finder_cpp/cone_finder.h"
+#include "cone_finder_cpp/cone_finder.hpp"
+#include "cone_finder_cpp/tools.hpp"
 #include <cv_bridge/cv_bridge.h> // cv_bridge converts between ROS 2 image messages and OpenCV image representations.
 #include <image_transport/image_transport.hpp> // Using image_transport allows us to publish and subscribe to compressed image streams in ROS2
 #include <opencv2/opencv.hpp> // We include everything about OpenCV as we don't care much about compilation time at the moment.
@@ -40,14 +41,19 @@ ConeFinder::ConeFinder()
         get_node_timers_interface());
     tfBuffer->setCreateTimerInterface(timer_interface);
     listener = std::make_shared<tf2_ros::TransformListener>(*tfBuffer);
-    service_ = this->create_service<tools_nav::srv::GetTarget>(
+    service_ = this->create_service<interfaces::srv::GetTarget>(
       "/get_cone_pos", std::bind(&ConeFinder::get_cone_server, this, _1, _2));
-    
-    //cv::namedWindow("Image window"); 
+    if (dev_mode_>0)
+    {
+      cv::namedWindow("Image window"); 
+    }
 }
 
 ConeFinder::~ConeFinder(){
-  cv::destroyWindow("Image window");
+  if (dev_mode_>0)
+  {
+    cv::destroyWindow("Image window");
+  }
 }
 
 
@@ -69,92 +75,38 @@ void ConeFinder::costMapCB(const nav_msgs::msg::OccupancyGrid::SharedPtr msg_in)
       //RCLCPP_INFO(this->get_logger(), " length  %d %d %f %d", occupancyGrid.info.width, occupancyGrid.info.height,occupancyGrid.info.resolution, sizeof(occupancyGrid.data[1]), sizeof(occupancyGrid.data[0]));
       count_=0;
       cv::Mat c_mat_image = cv::Mat::zeros(occupancyGrid.info.height, occupancyGrid.info.width, CV_8UC3);
-      c_mat_image.setTo(cv::Scalar(255, 255, 255));
+      cv::Mat c_mat_walls = cv::Mat::zeros(occupancyGrid.info.height, occupancyGrid.info.width, CV_8UC3);
+
       std::vector<cv::Point> p_100;
-      for (u_int i{0}; i < occupancyGrid.info.width*occupancyGrid.info.height; i++)
-      {
-          if (occupancyGrid.data[i]!=0)
-          {
-            cv::Point p = cv::Point(u_int{i%occupancyGrid.info.width},u_int{i/occupancyGrid.info.height});
-            if (occupancyGrid.data[i]==100)
-            {
-              c_mat_image.at<cv::Vec3b>(p)=cv::Vec3b(0,0,255);
-              p_100.push_back(p);
-            }
-            else
-            {
-              c_mat_image.at<cv::Vec3b>(p)=cv::Vec3b(0,255,0);
-            }
-          }
-      }
+      tools_.grid_2_image(occupancyGrid, p_100, c_mat_image, c_mat_walls);      
+
       // find camera position inside the costmap
       
       cv::Point Cam_pos = cv::Point(r_bot_,c_bot_);
-      cv::Point p_front = rotatePointOnImage(cv::Point(r_bot_,500), Cam_pos, rotation_angle_);
+      cv::Point p_front = tools_.rotate_point_on_image(cv::Point(r_bot_, 500), Cam_pos, rotation_angle_);
       //get the angle of the camera position and rotate the point for the line
       std::vector<cv::Point> p_nearest;
-       if (p_100.size()>0)
+      if (p_100.size()>0)
       {
         for (double cone : cone_x_)
         {
-          p_nearest.push_back(
-            findNearestPoint(p_100, Cam_pos, cv::Point(p_front.x * cone + p_front.x, 500)));
+          cv::Point p = tools_.find_nearest_point(p_100, Cam_pos, cv::Point(p_front.x * cone + p_front.x, 500));
+          p_nearest.push_back(cv::Point(p.x, p.y));
         }      
         publishMarker(p_nearest);
-        p_nearest_ =p_nearest;
+        p_nearest_ = p_nearest;
       }
-      /*
-      cv::line (c_mat_image, Cam_pos,p_front, cv::Vec3b(255,0,255), 1);
-      cv::line (c_mat_image, Cam_pos,cv::Point(p_front.x*cone_x_[0]+p_front.x,500), cv::Vec3b(0,0,255), 1);
-      cv::imshow("Image window", c_mat_image);
-      
-      cv::waitKey(3);
-      */
+      if (dev_mode_>0)
+      {
+        cv::line (c_mat_image, Cam_pos,p_front, cv::Vec3b(255,0,255), 1);
+        cv::line (c_mat_image, Cam_pos,cv::Point(p_front.x*cone_x_[0]+p_front.x,500), cv::Vec3b(0,0,255), 1);
+        cv::imshow("Image window", c_mat_image);
+        
+        cv::waitKey(3);
+      }
     }
 }
 
-
-cv::Point ConeFinder::rotatePointOnImage(const cv::Point& given_pt, const cv::Point& ref_pt, const double& angle_deg) {
-    double    rotation_angle = angle_deg * M_PI / 180.0;
-    cv::Point rotated_pt;
-
-    rotated_pt.x = (given_pt.x - ref_pt.x) * cos(rotation_angle) - (given_pt.y - ref_pt.y) * sin(rotation_angle) + ref_pt.x;
-    rotated_pt.y = (given_pt.x - ref_pt.x) * sin(rotation_angle) + (given_pt.y - ref_pt.y) * cos(rotation_angle) + ref_pt.y;
-
-    return rotated_pt;
-}
-
-double ConeFinder::distancePointToLine(cv::Point P, double m, double q) {
-    return std::abs(m * P.x - P.y + q) / std::sqrt(m * m + 1);
-}
-
-// Trova il punto nel set con la minima distanza dalla retta
-cv::Point ConeFinder::findNearestPoint(std::vector<cv::Point>& points, cv::Point P1, cv::Point P2) {
-    // Calcola la pendenza della retta
-    double m{0.0};
-    if ((P2.x - P1.x)!=0)
-    {
-      m = (P2.y - P1.y) / (P2.x - P1.x);
-    }
-    // Calcola l'intercetta y della retta
-    double q = P1.y - m * P1.x;
-    // Inizializza la distanza minima e il punto corrispondente
-    double minDistance = std::numeric_limits<double>::max();
-    cv::Point nearestPoint;
-    // Scansiona tutti i punti nel set e trova il punto con la minima distanza
-    for (const auto& point : points) {
-        double distance = distancePointToLine(point, m, q);
-        if (distance < minDistance) {
-            minDistance = distance;
-            nearestPoint = point;
-        }
-        if (distance < 1) {
-            return nearestPoint;
-        }
-    }
-
-    return nearestPoint;
-}
 
 void ConeFinder::publishMarker(std::vector<cv::Point> & p_vector)
 {
@@ -381,15 +333,10 @@ void ConeFinder::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg_in)
   try{
     transformCamera = tfBuffer->lookupTransform("map", "cam_frame", rclcpp::Time(0) );
     geometry_msgs::msg::Pose bot_camera{};
-    bot_camera.position.x = 0;
-    bot_camera.position.y = 0;
-    bot_camera.position.z = 0;
     geometry_msgs::msg::Pose bot_camera_tf{};    
-    tf2::doTransform(bot_camera_tf, bot_camera, transformCamera);    
-    float x_init = bot_camera_tf.position.x;
-    float y_init = bot_camera_tf.position.y;
-    get_map_indices(x_init, y_init, c_bot_, r_bot_);
-    rotation_angle_ = 2 * acos(bot_camera_tf.orientation.w);
+    tf2::doTransform(bot_camera_tf, bot_camera, transformCamera);
+    tools_.position_2_map(bot_pose_.position, map_res_, map_x0_, map_y0_, r_bot_, c_bot_);
+    rotation_angle_ = 2 * acos(bot_pose_.orientation.w);
     //RCLCPP_INFO(this->get_logger(), " %f ,%f ,%d, %d, %f %f",x_init, y_init, c_bot_, r_bot_, bot_pose_.orientation.w, rotation_angle_);
 
   } catch (tf2::TransformException &ex) {
@@ -399,15 +346,14 @@ void ConeFinder::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg_in)
   
 }
 
-void ConeFinder::get_cone_server(const std::shared_ptr<tools_nav::srv::GetTarget::Request> request,
-          std::shared_ptr<tools_nav::srv::GetTarget::Response>  response)
+void ConeFinder::get_cone_server(const std::shared_ptr<interfaces::srv::GetTarget::Request> request,
+          std::shared_ptr<interfaces::srv::GetTarget::Response>  response)
 {
   if (p_nearest_.size()>0)
   {
     RCLCPP_INFO(this->get_logger(), " founded !!");
     response->result=true;
-    response->target.x=p_nearest_[0].x * map_res_ + map_x0_;
-    response->target.y=p_nearest_[0].y * map_res_ + map_y0_;
+    tools_.map_2_position(p_nearest_[0].y, p_nearest_[0].x, map_res_, map_x0_, map_y0_, response->target);
   }
   else{
     RCLCPP_INFO(this->get_logger(), " NOT founded !!");
@@ -416,12 +362,6 @@ void ConeFinder::get_cone_server(const std::shared_ptr<tools_nav::srv::GetTarget
     response->target.y=0;
   }
   response->type.data="Cone";
-}
-
-void ConeFinder::get_map_indices(float x, float y, int& ix, int& iy)
-{
-	ix = static_cast<int>(round ((x-map_x0_)/map_res_ - map_res_));
-	iy = static_cast<int>(round ((y-map_y0_)/map_res_ - map_res_));
 }
 
 int main(int argc, char * argv[])

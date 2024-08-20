@@ -25,6 +25,7 @@
   <depend>roscpp</depend>
   <depend>rviz</depend>
   <depend>tools_nav</depend>
+  <depend>interfaces</depend>
   
   <export>
     <build_type>ament_cmake</build_type>
