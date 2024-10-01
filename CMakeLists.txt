@@ -21,9 +21,11 @@ find_package(tf2_ros REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(tools_nav REQUIRED)
 find_package(interfaces REQUIRED)
+find_package(common REQUIRED)
 
 add_executable(cone_finder src/cone_finder.cpp src/tools.cpp)
 add_executable(search_target src/search_target.cpp src/tools.cpp)
+add_executable(search_target_test src/search_target_test.cpp src/tools.cpp)
 
 ament_target_dependencies(cone_finder 
 visualization_msgs
@@ -38,7 +40,8 @@ tf2_ros
 tf2_geometry_msgs
 tools_nav
 interfaces
-cv_bridge image_transport OpenCV)
+cv_bridge image_transport OpenCV
+common)
 
 ament_target_dependencies(search_target 
 visualization_msgs
@@ -53,7 +56,24 @@ tf2_ros
 tf2_geometry_msgs
 tools_nav
 interfaces
-cv_bridge image_transport OpenCV)
+cv_bridge image_transport OpenCV
+common)
+
+ament_target_dependencies(search_target_test
+visualization_msgs
+sensor_msgs
+nav_msgs
+vision_msgs
+rclcpp
+std_msgs
+geometry_msgs
+tf2
+tf2_ros
+tf2_geometry_msgs
+tools_nav
+interfaces
+cv_bridge image_transport OpenCV
+common)
 
 target_include_directories(cone_finder PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -65,21 +85,25 @@ target_include_directories(search_target PUBLIC
   $<INSTALL_INTERFACE:include>)
 target_compile_features(search_target PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
 
+target_include_directories(search_target_test PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>)
+target_compile_features(search_target_test PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
+
 install(TARGETS
 cone_finder
 search_target
+search_target_test
   DESTINATION lib/${PROJECT_NAME})
 
-if(BUILD_TESTING)
-  find_package(ament_lint_auto REQUIRED)
-  # the following line skips the linter which checks for copyrights
-  # comment the line when a copyright and license is added to all source files
-  set(ament_cmake_copyright_FOUND TRUE)
-  # the following line skips cpplint (only works in a git repo)
-  # comment the line when this package is in a git repo and when
-  # a copyright and license is added to all source files
-  set(ament_cmake_cpplint_FOUND TRUE)
-  ament_lint_auto_find_test_dependencies()
-endif()
+# if(BUILD_TESTING)
+#   find_package(ament_cmake_gtest REQUIRED)
+#   ament_add_gtest(${PROJECT_NAME}_test test/search_target.cpp)
+#   target_include_directories(${PROJECT_NAME}_test PUBLIC
+#     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+#     $<INSTALL_INTERFACE:include>
+#   )
+#   target_link_libraries(${PROJECT_NAME}_test name_of_local_library)
+# endif()
 
 ament_package()

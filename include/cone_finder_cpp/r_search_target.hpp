@@ -22,14 +22,8 @@
 #include <geometry_msgs/msg/pose2_d.hpp>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include "interfaces/srv/get_target.hpp"
-#include "interfaces/srv/save_cost_map.hpp"
 
 #include "cone_finder_cpp/tools.hpp"
-#include "common/common.hpp"
-
-#include <boost/math/special_functions/round.hpp>
-#include <boost/numeric/ublas/matrix.hpp>
-#include <boost/numeric/ublas/io.hpp>
 
 #ifndef SearchTarget_H
 #define SearchTarget_H
@@ -217,73 +211,6 @@ class Kernel {
     }
 };
 
-class OccupancyGridMatrix
-{
-public:
-    // Constructor with nav_msgs::msg::OccupancyGrid as input and height/width as parameters
-    OccupancyGridMatrix(int height, int width, nav_msgs::msg::OccupancyGrid occupancyGrid)
-        : height_(height), width_(width), matrix_(height, width)  // Initialize matrix
-    {
-        for (int i = 0; i < width * height; ++i)
-        {
-            if (occupancyGrid.data[i] == 100)
-            {
-                // Correct indexing logic (row-major order)
-                int col = static_cast<int>(i % width);
-                int row = static_cast<int>(i / width);
-                matrix_(row, col) = 100;
-            }
-        }
-    }
-
-    // Default constructor
-    OccupancyGridMatrix(int height, int width) : height_(height), width_(width), matrix_(height, width) {}
-
-    // Destructor
-    ~OccupancyGridMatrix() {}
-
-    int height_;  // Store height
-    int width_;   // Store width
-    boost::numeric::ublas::matrix<double> matrix_;  // Matrix with size (height, width)
-};
-
-class OccupancyGrid
-{
-public:
-    // Constructor with nav_msgs::msg::OccupancyGrid as input
-    OccupancyGrid(nav_msgs::msg::OccupancyGrid occupancyGrid)
-        : map_res_(occupancyGrid.info.resolution),
-          map_x0_(occupancyGrid.info.origin.position.x),
-          map_y0_(occupancyGrid.info.origin.position.y),
-          grid_(occupancyGrid),
-          im_occgrid_(cv::Mat::zeros(occupancyGrid.info.height, occupancyGrid.info.width, CV_8UC3)),
-          imm_walls_(cv::Mat::zeros(occupancyGrid.info.height, occupancyGrid.info.width, CV_8UC3)),
-          // Initialize matrix_ with the dimensions of the occupancy grid
-          matrix_(occupancyGrid.info.height, occupancyGrid.info.width, occupancyGrid)
-    {
-        // Convert from occupancy grid to image
-        tools_.grid_2_image(occupancyGrid, p_100_, im_occgrid_, imm_walls_);
-    }
-
-    // Default constructor
-    OccupancyGrid() : map_x0_(0), map_y0_(0), map_res_(0), matrix_(0, 0, nav_msgs::msg::OccupancyGrid())
-    {
-    }
-
-    // Destructor
-    ~OccupancyGrid() {}
-
-    ToolsCam tools_; 
-    float map_x0_{};
-    float map_y0_{};
-    float map_res_{};
-    nav_msgs::msg::OccupancyGrid grid_{};
-    cv::Mat im_occgrid_{};
-    cv::Mat imm_walls_{};
-    std::vector<cv::Point> p_100_{}; // Vector of the walls points
-    OccupancyGridMatrix matrix_; // Matrix representing the occupancy grid
-};
-
 class SearchTarget: public rclcpp::Node
 {
 public:
@@ -298,14 +225,10 @@ private:
   rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr sub_costmap_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr sub_odometry_;
 
-  rclcpp::Service<interfaces::srv::GetTarget>::SharedPtr srv_get_target_;
-  rclcpp::Service<interfaces::srv::SaveCostMap>::SharedPtr srv_save_cost_map_;
+  rclcpp::Service<interfaces::srv::GetTarget>::SharedPtr service_;
 
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr publisher_maker_;
   rclcpp::Publisher<vision_msgs::msg::BoundingBox2DArray>::SharedPtr publisher_BB_;
-
-  //! Ros2 Timer variable.
-  rclcpp::TimerBase::SharedPtr main_timer_;
 
   // input callback
   void costmap_cb(const nav_msgs::msg::OccupancyGrid::SharedPtr msg_in);
@@ -314,38 +237,30 @@ private:
 
   void get_search_target_server(const std::shared_ptr<interfaces::srv::GetTarget::Request> request,
           std::shared_ptr<interfaces::srv::GetTarget::Response> response);
-  void save_cost_map_server(const std::shared_ptr<interfaces::srv::SaveCostMap::Request> request,
-          std::shared_ptr<interfaces::srv::SaveCostMap::Response> response);
 
   // internal functions
-  void publish_marker(std::vector<geometry_msgs::msg::Point> & p_vector);
-
-  void continuosCallback();
+ void publish_marker(std::vector<geometry_msgs::msg::Point> & p_vector);
 
   // input
-  OccupancyGrid oc_{};
+  float map_x0_{}, map_y0_{}, map_res_{};
   geometry_msgs::msg::Pose bot_pose_{}, goal_pose_{};
   
   
   int r_bot_{0};                  // row the base link of the robot
-  int c_bot_{0};                  // column the base link of the robot
+	int c_bot_{0};                  // column the base link of the robot
   float rotation_angle_{0.0};     // heading of the robot
 
   // internal data
   ToolsCam tools_{};              // tools cone finder node 
-  Common common_{};              // tools cone finder node 
   rclcpp::Time msgs_time_[4];     // test to chech if all the messages has been updated
 
   // output
   geometry_msgs::msg::Point p_target_{};          // next target point
 
   // parameters 
-  int dev_mode_{0};                 // dev level 0 - 3
-  double distance_wall_{10};        // parameter of the algorithm
-  int search_dir_{1};               // 1 right, -1 left direction of research
-  bool continuos_call_back_{true};  // if true the continuos callback will work
-  
-  
+  int dev_mode_{0};               // dev level 0 - 3
+  double distance_wall_{10};      // parameter of the algorithm
+  int search_dir_{1};             // 1 right, -1 left direction of research
 
 //   Kernel<5> kernel_{Matrix<5>{
 //     {0.0, 0.0, 0.25, 0.22, 0.31, 
@@ -362,6 +277,7 @@ private:
     0.4, 0.35,  0.7, 0.22, 0.31}}};
 
 rclcpp::Publisher<sensor_msgs::msg::CompressedImage>::SharedPtr pub_visualize_image_;
+
 };
 
 #endif

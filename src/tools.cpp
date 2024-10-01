@@ -43,7 +43,7 @@ void ToolsCam::grid_2_image(nav_msgs::msg::OccupancyGrid &occupancyGrid, std::ve
       }
     }
   }
-}\
+}
 
 cv::Point ToolsCam::grid_2_cvpoint(int grid_index, size_t grid_width, size_t grid_height)
 {
@@ -288,4 +288,23 @@ void ToolsCam::map_2_position(int ix, int iy, float map_res, float map_x0,  floa
 	p.x = (ix * map_res) + map_x0;
   p.y = (iy * map_res) + map_y0;
   p.z = 0;
+}
+
+
+bool ToolsCam::tryWriteMapToFile(std::string &name,
+  nav_msgs::msg::OccupancyGrid & map)
+{
+  cv::Mat c_mat_image = cv::Mat::zeros(
+        map.info.height, map.info.width, CV_8UC3);
+  cv::Mat c_mat_walls = cv::Mat::zeros(
+      map.info.height, map.info.width, CV_8UC3);
+  cv::Mat c_mat_walls_gray = cv::Mat::zeros(
+      map.info.height, map.info.width, CV_8UC3);
+
+  std::vector<cv::Point> p_100; // vector of the walls points
+  // convert from occupancy grid to image
+  grid_2_image(map, p_100, c_mat_image, c_mat_walls);
+  cv::imwrite(name, c_mat_walls); // A JPG FILE IS BEING SAVED
+  std::cout << "[INFO] [map_io]: Map saved" << std::endl;
+  return true;
 }

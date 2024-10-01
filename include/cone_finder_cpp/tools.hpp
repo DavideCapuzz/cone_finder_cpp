@@ -1,7 +1,7 @@
 #include <vector>
 #include <image_transport/image_transport.hpp> // Using image_transport allows us to publish and subscribe to compressed image streams in ROS2
 #include <opencv2/opencv.hpp> // We include everything about OpenCV as we don't care much about compilation time at the moment.
-
+#include <string>
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/string.hpp"
 #include <sensor_msgs/msg/image.hpp>
@@ -64,6 +64,8 @@ public:
     rclcpp::Time (&msgs_time_)[4],rclcpp::Duration max_delta);  
 
   cv::Point cvpoint_2_grid(cv::Point p, size_t grid_height);
+
+  bool tryWriteMapToFile(std::string & name,nav_msgs::msg::OccupancyGrid & map);
 };
 
 #endif
