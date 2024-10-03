@@ -44,6 +44,9 @@ class Matrix {
     Matrix(Matrix_template&& matrix)
         : matrix_{std::move(matrix)} {}
 
+    Matrix()
+        : matrix_{} {}
+
     Row& operator[](std::size_t idx) { return matrix_[idx]; }
     const Row& operator[](std::size_t idx) const { return matrix_[idx]; }
 
@@ -266,17 +269,17 @@ public:
     }
 
     // Default constructor
-    OccupancyGrid() : map_x0_(0), map_y0_(0), map_res_(0), matrix_(0, 0, nav_msgs::msg::OccupancyGrid())
+    OccupancyGrid() :  map_res_(0), map_x0_(0), map_y0_(0), matrix_(0, 0, nav_msgs::msg::OccupancyGrid())
     {
     }
 
     // Destructor
     ~OccupancyGrid() {}
 
-    ToolsCam tools_; 
-    float map_x0_{};
-    float map_y0_{};
+    ToolsCam tools_{};
     float map_res_{};
+    float map_x0_{};
+    float map_y0_{};    
     nav_msgs::msg::OccupancyGrid grid_{};
     cv::Mat im_occgrid_{};
     cv::Mat imm_walls_{};
@@ -319,6 +322,7 @@ private:
 
   // internal functions
   void publish_marker(std::vector<geometry_msgs::msg::Point> & p_vector);
+  bool check_time(std::array<std::chrono::time_point<std::chrono::system_clock>, 2> & msgs_time);
 
   void continuosCallback();
 
@@ -334,8 +338,7 @@ private:
   // internal data
   ToolsCam tools_{};              // tools cone finder node 
   Common common_{};              // tools cone finder node 
-  rclcpp::Time msgs_time_[4];     // test to chech if all the messages has been updated
-
+  std::array<std::chrono::time_point<std::chrono::system_clock>, 2> msgs_time_;
   // output
   geometry_msgs::msg::Point p_target_{};          // next target point
 

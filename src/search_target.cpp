@@ -79,7 +79,7 @@ SearchTarget::~SearchTarget()
 void SearchTarget::continuosCallback()
 {
   // check if the messages is update  
-  if (continuos_call_back_) // TODO: check if all the information are updated
+  if (continuos_call_back_ && check_time(msgs_time_)) // TODO: check if all the information are updated
   {
     // find camera position inside the costmap
     cv::Point bot_pos = cv::Point(r_bot_, c_bot_);
@@ -91,7 +91,6 @@ void SearchTarget::continuosCallback()
     {
       RCLCPP_INFO(this->get_logger(), "%d, %d %d %d ", bot_pos.x, bot_pos.y, p_lateral.x, p_lateral.y);
     }
-    cv::Point closest_point;
     if (oc_.p_100_.size() > 0) // check if the cost map has some obstacles
     {
       double distance{0};
@@ -121,6 +120,7 @@ void SearchTarget::continuosCallback()
         {
           if (line.size()>3)
           {            
+            // if line greater than 3 use the direction of the line otherwise use the direction of the robot
             if ((line[line.size()-3].x - line[line.size()-2].x)!=0)
             {
               r = atan((line[line.size()-3].y - line[line.size()-2].y)/(line[line.size()-3].x - line[line.size()-2].x)) * 180 / 3.14;
@@ -133,19 +133,14 @@ void SearchTarget::continuosCallback()
             }            
             kernel_.set_angle(r);
           }
-          Matrix<5> c_m{
-              {0.0, 0.0, 0.0, 0.0, 0.0,
-               0.0, 0.0, 0.0, 0.0, 0.0,
-               0.0, 0.0, 0.0, 0.0, 0.0,
-               0.0, 0.0, 0.0, 0.0, 0.0,
-               0.0, 0.0, 0.0, 0.0, 0.0}};
+          Matrix<5> c_m{};
           for (int i = -2; i < 2; i++)
           {
             for (int j = -2; j < 2; j++)
             {
               c_m[2 + i][2 + j] = oc_.matrix_.matrix_(static_cast<int>(next_i) + i, static_cast<int>(next_j) + j);
               oc_.im_occgrid_.at<cv::Vec3b>(
-                cv::Point(static_cast<int>(next_i) +i, static_cast<int>(next_j) + j)) = cv::Vec3b(250*c_m[2 + i][2 + j], 0, 0);
+                cv::Point(static_cast<int>(next_i) +i, static_cast<int>(next_j) + j)) = cv::Vec3b(250*c_m[2 + i][2 + j], 0, 0);              
             }
           }
           double i_r;
@@ -165,7 +160,7 @@ void SearchTarget::continuosCallback()
 
           if (dev_mode_ > 0)
           {
-            oc_.im_occgrid_.at<cv::Vec3b>(cv::Point(next_i, next_j)) = cv::Vec3b(250, 0, 0);
+            oc_.im_occgrid_.at<cv::Vec3b>(cv::Point(next_i, next_j)) = cv::Vec3b(0, 250, 0);
           }
         } while (result);
         RCLCPP_INFO(this->get_logger(), "rot %f %f %f", rotation_angle_, next_i, next_j);
@@ -208,10 +203,26 @@ void SearchTarget::continuosCallback()
   }
 }
 
+bool SearchTarget::check_time(std::array<std::chrono::time_point<std::chrono::system_clock>, 2> & msgs_time)
+{
+  bool flag{true};
+  for (size_t i = 0; i < msgs_time.size(); ++i) {
+        // Capture the current time and store it in the array+        
+        if (std::chrono::duration_cast<std::chrono::milliseconds>(
+          std::chrono::system_clock::now()-msgs_time[i]).count()>300)
+        {
+          flag = false;
+          // std::cout<<"i "<<i<< " false "<<std::chrono::duration_cast<std::chrono::milliseconds>(
+          // std::chrono::system_clock::now()-msgs_time[i]).count()<<"/n";
+        }
+    }
+  return flag;
+}
+
 void SearchTarget::costmap_cb(const nav_msgs::msg::OccupancyGrid::SharedPtr msg_in)
 {
-  oc_ ={*msg_in};  
-  // msgs_time_[2] = std::chrono::system_clock;
+  oc_ = {*msg_in};  
+  msgs_time_[0] = std::chrono::system_clock::now();;
 }
 
 void SearchTarget::publish_marker(std::vector<geometry_msgs::msg::Point> &p_vector)
@@ -225,7 +236,7 @@ void SearchTarget::publish_marker(std::vector<geometry_msgs::msg::Point> &p_vect
 
 void SearchTarget::odom_cb(const nav_msgs::msg::Odometry::SharedPtr msg_in)
 {
-  msgs_time_[3] = this->get_clock()->now();
+  msgs_time_[1] = std::chrono::system_clock::now();;
   bot_pose_.position = msg_in->pose.pose.position;
   bot_pose_.orientation = msg_in->pose.pose.orientation;
   // https://www.euclideanspace.com/maths/geometry/rotations/conversions/quaternionToAngle/index.htm
