@@ -3,6 +3,8 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <iostream>
+#include <fstream>
 
 #include "cone_finder_cpp/tools.hpp"
 #include <cv_bridge/cv_bridge.h> // cv_bridge converts between ROS 2 image messages and OpenCV image representations.
@@ -11,7 +13,7 @@
  
 #include <cmath>
 #include <boost/math/special_functions/round.hpp>
-
+#include <yaml-cpp/yaml.h>
 
 using namespace std::chrono_literals;
 
@@ -291,7 +293,7 @@ void ToolsCam::map_2_position(int ix, int iy, float map_res, float map_x0,  floa
 }
 
 
-bool ToolsCam::tryWriteMapToFile(std::string &name,
+bool ToolsCam::WriteMapToImage(std::string &name,
   nav_msgs::msg::OccupancyGrid & map)
 {
   cv::Mat c_mat_image = cv::Mat::zeros(
@@ -306,5 +308,57 @@ bool ToolsCam::tryWriteMapToFile(std::string &name,
   grid_2_image(map, p_100, c_mat_image, c_mat_walls);
   cv::imwrite(name, c_mat_walls); // A JPG FILE IS BEING SAVED
   std::cout << "[INFO] [map_io]: Map saved" << std::endl;
+  return true;
+}
+
+bool ToolsCam::WriteMapToYaml(std::string &name,
+  nav_msgs::msg::OccupancyGrid & map)
+{
+  YAML::Emitter out;
+  out << YAML::BeginMap;
+  out << YAML::Key << "frame_id";
+  out << YAML::Value << map.header.frame_id;
+  out << YAML::Key << "resolution";
+  out << YAML::Value << map.info.resolution;
+  out << YAML::Key << "origin_x";
+  out << YAML::Value << map.info.origin.position.x;
+  out << YAML::Key << "origin_y";
+  out << YAML::Value << map.info.origin.position.y;
+  out << YAML::Key << "height";
+  out << YAML::Value << map.info.height;
+  out << YAML::Key << "width";
+  out << YAML::Value << map.info.width;
+  out << YAML::Key << "data";
+  out << YAML::Value << YAML::BeginSeq;;
+  for (const auto& num : map.data) {
+      out << num;
+  }
+
+  out << YAML::EndSeq;  // End the YAML sequence
+  out << YAML::EndMap;
+
+  std::ofstream fout(name + ".yaml");
+  fout << out.c_str();
+  std::cout << "[INFO] [map_io]: Map saved " << name<<std::endl;
+  return true;
+}
+
+bool ToolsCam::DecodeYamlToMap(std::string &name,
+  nav_msgs::msg::OccupancyGrid & map)
+{
+  YAML::Node config = YAML::LoadFile(name);
+  // nav_msgs::msg::OccupancyGrid & map;
+  map.header.frame_id = config["frame_id"].as<std::string>();
+  map.info.resolution = config["resolution"].as<float>();
+  map.info.origin.position.x = config["origin_x"].as<double>();
+  map.info.origin.position.y = config["origin_y"].as<double>();
+  map.info.height = config["height"].as<double>();
+  map.info.width = config["width"].as<double>();
+  map.data.resize(map.info.width * map.info.height);
+  for (std::size_t i = 0; i < config["data"].size(); ++i) {
+      map.data[i] = config["data"][i].as<double>();  // Assign YAML node value to the array
+  }
+
+  std::cout << "[INFO] [map_io]: Map loaded " << name<<std::endl;
   return true;
 }

@@ -52,11 +52,13 @@ SearchTarget::SearchTarget()
   this->declare_parameter("distance_wall_", 0.5);
   this->declare_parameter("search_dir_", 1);
   this->declare_parameter("continuos_call_back_", true);
+  this->declare_parameter("angle_offset_", 0.0);
 
   dev_mode_ = this->get_parameter("dev_mode_").as_int();
   distance_wall_ = this->get_parameter("distance_wall_").as_double();
   search_dir_ = this->get_parameter("search_dir_").as_int();
   continuos_call_back_ = this->get_parameter("continuos_call_back_").as_bool();
+  angle_offset_ = this->get_parameter("angle_offset_").as_double();
   RCLCPP_INFO(this->get_logger(), "dev_mode  %d", dev_mode_);
 
   // intialize all
@@ -114,7 +116,7 @@ void SearchTarget::continuosCallback()
         double next_i = closest_point.x;
         double next_j = closest_point.y;
         //kernel_.flip();     
-        kernel_.set_angle(rotation_angle_);
+        kernel_.set_angle(rotation_angle_+angle_offset_);
         double r {};
         do
         {
@@ -212,8 +214,6 @@ bool SearchTarget::check_time(std::array<std::chrono::time_point<std::chrono::sy
           std::chrono::system_clock::now()-msgs_time[i]).count()>300)
         {
           flag = false;
-          // std::cout<<"i "<<i<< " false "<<std::chrono::duration_cast<std::chrono::milliseconds>(
-          // std::chrono::system_clock::now()-msgs_time[i]).count()<<"/n";
         }
     }
   return flag;
@@ -282,7 +282,7 @@ void SearchTarget::get_search_target_server(const std::shared_ptr<interfaces::sr
 void SearchTarget::save_cost_map_server(const std::shared_ptr<interfaces::srv::SaveCostMap::Request> request,
                                             std::shared_ptr<interfaces::srv::SaveCostMap::Response> response)
 {
-  if (tools_.tryWriteMapToFile(request->name, oc_.grid_))
+  if (tools_.WriteMapToYaml(request->name, oc_.grid_))
   {
     // RCLCPP_INFO(this->get_logger(), " founded !!");
     response->result = true;

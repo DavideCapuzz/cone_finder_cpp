@@ -17,6 +17,11 @@
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <geometry_msgs/msg/pose2_d.hpp>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+#include <yaml-cpp/yaml.h>
+
+#include <boost/math/special_functions/round.hpp>
+#include <boost/numeric/ublas/matrix.hpp>
+#include <boost/numeric/ublas/io.hpp>
 
 #ifndef ToolsCam_H
 #define ToolsCam_H
@@ -65,7 +70,262 @@ public:
 
   cv::Point cvpoint_2_grid(cv::Point p, size_t grid_height);
 
-  bool tryWriteMapToFile(std::string & name,nav_msgs::msg::OccupancyGrid & map);
+  bool WriteMapToImage(std::string & name, nav_msgs::msg::OccupancyGrid & map);
+  bool WriteMapToYaml(std::string & name, nav_msgs::msg::OccupancyGrid & map);
+  bool DecodeYamlToMap(std::string & name, nav_msgs::msg::OccupancyGrid & map);
+};
+
+template <int Size>
+class Matrix {
+    using Row = std::array<double, Size>;
+    using Matrix_template = std::array<Row, Size>;
+    Matrix_template matrix_;
+
+    public:
+    Matrix(Matrix_template&& matrix)
+        : matrix_{std::move(matrix)} {}
+
+    Matrix()
+        : matrix_{} {}
+
+    Row& operator[](std::size_t idx) { return matrix_[idx]; }
+    const Row& operator[](std::size_t idx) const { return matrix_[idx]; }
+
+    void printMatrix() const {
+        for (auto const& row : matrix_) {
+            for (auto const val : row) {
+                std::cout << val << "\t";
+            }
+            std::cout << '\n';
+        }
+    }
+};
+
+template <int Size>
+class Kernel {
+   private:
+    Matrix<Size> kernel_;
+    Matrix<Size> kernel_original_;
+
+    int class_;
+    bool debug{false};
+    static constexpr double fraction_{45.0};
+
+   public:
+    Kernel(Matrix<Size>&& matrix)
+        : kernel_{std::move(matrix)},
+          kernel_original_{kernel_} {
+        if (debug) {
+            std::cout << "class " << class_ << '\n';
+        }
+    }
+
+    void print_mat() const { kernel_.printMatrix(); }
+    void print_original_mat() const { kernel_original_.printMatrix(); }
+    void print_original_angle() const { kernel_original_.printAngle(); }
+
+    void set_angle(double ang) {
+        if (get_class(ang) != class_) {
+            class_ = get_class(ang);
+            shift(class_);
+            if (debug) {
+                std::cout << "new class " << class_ << '\n';
+            }
+        } else {
+            if (debug) {
+                std::cout << "old class " << class_ << '\n';
+            }
+        }
+    }
+
+    void flip()
+    {
+        for (int i = 0; i < (Size-1)/2; i++) {
+            for (int j = 0; j < Size; j++) {
+                double a = kernel_original_[i][j];
+                kernel_original_[i][j] = kernel_original_[Size-i-1][j];
+                kernel_original_[Size-i-1][j] = a;
+            }
+        }
+    }
+
+    auto get_class(double ang) {
+        return static_cast<int>(fmod(ang, 360.0 - 22.5) / fraction_);
+    }
+
+    std::tuple<bool, int, int> evalute_next_point(const Matrix<Size>& matrix) {
+        double max_value{0.0};
+        bool found{false};
+        int i_out{0};
+        int j_out{0};
+        for (int i = 0; i < Size; i++) {
+            for (int j = 0; j < Size; j++) {
+                if (kernel_[i][j] * matrix[i][j] > max_value) {
+                    max_value = kernel_[i][j] * matrix[i][j];
+                    i_out = i;
+                    j_out = j;
+                    found = true;
+                }
+            }
+        }
+
+        if (!found)
+        {
+            i_out = (Size -1)/2;
+            j_out = (Size -1)/2;
+        }
+        // Packing values to return a tuple
+        return std::make_tuple(found, i_out, j_out);
+    }
+
+    void shift(int shift) {
+        std::vector<double> a;
+        for (int i = 0; i < static_cast<int>(Size / 2); i++) {
+            for (int j = i; j < Size - i; j++) {
+                a.push_back(kernel_original_[i][j]);
+                if (debug) {
+                    std::cout << i << "\t" << j << "\t"
+                              << kernel_original_[i][j] << '\n';
+                }
+            }
+            for (int j = i + 1; j < Size - i - 1; j++) {
+                a.push_back(kernel_original_[j][Size - i - 1]);
+                if (debug) {
+                    std::cout << j << "\t" << Size - i - 1 << "\t"
+                              << kernel_original_[j][Size - i - 1] << '\n';
+                }
+            }
+            for (int j = Size - i - 1; j >= i; j--) {
+                a.push_back(kernel_original_[Size - i - 1][j]);
+                if (debug) {
+                    std::cout << Size - i - 1 << "\t" << j << "\t"
+                              << kernel_original_[Size - i - 1][j] << '\n';
+                }
+            }
+            for (int j = Size - i - 1; j > i; j--) {
+                a.push_back(kernel_original_[j][i]);
+                if (debug) {
+                    std::cout << j << "\t" << i << "\t"
+                              << kernel_original_[j][i] << '\n';
+                }
+            }
+            if (debug) {
+                std::cout << "oh1 "
+                          << (static_cast<int>((Size) / 2) - i) * shift << '\n';
+            }
+            for (int j = 0; j < (static_cast<int>((Size) / 2) - i) * shift;
+                 j++) {
+                double el = a.back();
+                a.insert(a.begin(), el);
+                a.pop_back();
+                if (debug) {
+                    std::cout << el << '\n';
+                }
+            }
+            if (debug) {
+                std::cout << "oh2" << '\n';
+            }
+            for (int j = i; j < Size - i; j++) {
+                kernel_[i][j] = a.front();
+                a.erase(a.begin());
+                if (debug) {
+                    std::cout << i << "\t" << j << "\t" << kernel_[i][j]
+                              << '\n';
+                }
+            }
+            for (int j = i + 1; j < Size - i - 1; j++) {
+                kernel_[j][Size - i - 1] = a.front();
+                a.erase(a.begin());
+                if (debug) {
+                    std::cout << j << "\t" << Size - i - 1 << "\t"
+                              << kernel_[j][Size - i - 1] << '\n';
+                }
+            }
+            for (int j = Size - i - 1; j >= i; j--) {
+                kernel_[Size - i - 1][j] = a.front();
+                a.erase(a.begin());
+                if (debug) {
+                    std::cout << Size - i - 1 << "\t" << j << "\t"
+                              << kernel_[Size - i - 1][j] << '\n';
+                }
+            }
+            for (int j = Size - i - 1; j > i; j--) {
+                kernel_[j][i] = a.front();
+                a.erase(a.begin());
+                if (debug) {
+                    std::cout << j << "\t" << i << "\t" << kernel_[j][i]
+                              << '\n';
+                }
+            }
+        }
+    }
+};
+
+class OccupancyGridMatrix
+{
+public:
+    // Constructor with nav_msgs::msg::OccupancyGrid as input and height/width as parameters
+    OccupancyGridMatrix(int height, int width, nav_msgs::msg::OccupancyGrid occupancyGrid)
+        : height_(height), width_(width), matrix_(height, width)  // Initialize matrix
+    {
+        for (int i = 0; i < width * height; ++i)
+        {
+            if (occupancyGrid.data[i] == 100)
+            {
+                // Correct indexing logic (row-major order)
+                int col = static_cast<int>(i % width);
+                int row = static_cast<int>(i / width);
+                matrix_(row, col) = 100;
+            }
+        }
+    }
+
+    // Default constructor
+    OccupancyGridMatrix(int height, int width) : height_(height), width_(width), matrix_(height, width) {}
+
+    // Destructor
+    ~OccupancyGridMatrix() {}
+
+    int height_;  // Store height
+    int width_;   // Store width
+    boost::numeric::ublas::matrix<double> matrix_;  // Matrix with size (height, width)
+};
+
+class OccupancyGrid
+{
+public:
+    // Constructor with nav_msgs::msg::OccupancyGrid as input
+    OccupancyGrid(nav_msgs::msg::OccupancyGrid occupancyGrid)
+        : map_res_(occupancyGrid.info.resolution),
+          map_x0_(occupancyGrid.info.origin.position.x),
+          map_y0_(occupancyGrid.info.origin.position.y),
+          grid_(occupancyGrid),
+          im_occgrid_(cv::Mat::zeros(occupancyGrid.info.height, occupancyGrid.info.width, CV_8UC3)),
+          imm_walls_(cv::Mat::zeros(occupancyGrid.info.height, occupancyGrid.info.width, CV_8UC3)),
+          // Initialize matrix_ with the dimensions of the occupancy grid
+          matrix_(occupancyGrid.info.height, occupancyGrid.info.width, occupancyGrid)
+    {
+        // Convert from occupancy grid to image
+        tools_.grid_2_image(occupancyGrid, p_100_, im_occgrid_, imm_walls_);
+    }
+
+    // Default constructor
+    OccupancyGrid() :  map_res_(0), map_x0_(0), map_y0_(0), matrix_(0, 0, nav_msgs::msg::OccupancyGrid())
+    {
+    }
+
+    // Destructor
+    ~OccupancyGrid() {}
+
+    ToolsCam tools_{};
+    float map_res_{};
+    float map_x0_{};
+    float map_y0_{};    
+    nav_msgs::msg::OccupancyGrid grid_{};
+    cv::Mat im_occgrid_{};
+    cv::Mat imm_walls_{};
+    std::vector<cv::Point> p_100_{}; // Vector of the walls points
+    OccupancyGridMatrix matrix_; // Matrix representing the occupancy grid
 };
 
 #endif

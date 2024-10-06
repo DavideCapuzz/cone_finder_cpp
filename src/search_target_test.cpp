@@ -11,11 +11,15 @@
 #include "common/common.hpp"
 #include <cmath>
 #include <boost/math/special_functions/round.hpp>
-
+#include "cone_finder_cpp/tools.hpp"
 
 
 int main()
 {
+  ToolsCam tools_{};              // tools cone finder node 
   std::cout << "oh" << std::endl;
+  nav_msgs::msg::OccupancyGrid map{};
+  std::string file_name = "/home/davide-work/humble_ws/wheele/src/cone_finder_cpp/start1.yaml";
+  tools_.DecodeYamlToMap(file_name,map);
   return 0;
 }

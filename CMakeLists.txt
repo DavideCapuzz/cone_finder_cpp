@@ -22,6 +22,11 @@ find_package(geometry_msgs REQUIRED)
 find_package(tools_nav REQUIRED)
 find_package(interfaces REQUIRED)
 find_package(common REQUIRED)
+find_package(yaml-cpp REQUIRED)
+
+include_directories(HEADERS_EXECUTABLE
+    ${YAML_INCLUDE_DIRS}
+)
 
 add_executable(cone_finder src/cone_finder.cpp src/tools.cpp)
 add_executable(search_target src/search_target.cpp src/tools.cpp)
@@ -43,6 +48,10 @@ interfaces
 cv_bridge image_transport OpenCV
 common)
 
+target_link_libraries(cone_finder
+    yaml-cpp
+)
+
 ament_target_dependencies(search_target 
 visualization_msgs
 sensor_msgs
@@ -59,6 +68,10 @@ interfaces
 cv_bridge image_transport OpenCV
 common)
 
+target_link_libraries(search_target
+    yaml-cpp
+)
+
 ament_target_dependencies(search_target_test
 visualization_msgs
 sensor_msgs
@@ -74,6 +87,10 @@ tools_nav
 interfaces
 cv_bridge image_transport OpenCV
 common)
+
+target_link_libraries(search_target_test
+    yaml-cpp
+)
 
 target_include_directories(cone_finder PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
