@@ -29,6 +29,8 @@
 #include "cone_finder_cpp/tools.hpp"
 #include "common/common.hpp"
 
+#include "cone_finder_cpp/core_search_target.hpp"
+
 #ifndef SearchTarget_H
 #define SearchTarget_H
 
@@ -71,8 +73,7 @@ private:
 
   void continuosCallback();
 
-  // input
-  OccupancyGrid oc_{};
+  // input  
   geometry_msgs::msg::Pose bot_pose_{}, goal_pose_{};
   
   
@@ -94,7 +95,7 @@ private:
   bool continuos_call_back_{true};  // if true the continuos callback will work
   double angle_offset_{0.0};
   
-
+  CoreSearchTarget core_;
 //   Kernel<5> kernel_{Matrix<5>{
 //     {0.0, 0.0, 0.25, 0.22, 0.31, 
 //     0.0,  0.0, 0.3, 0.28, 0.32, 

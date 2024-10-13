@@ -28,9 +28,9 @@ include_directories(HEADERS_EXECUTABLE
     ${YAML_INCLUDE_DIRS}
 )
 
-add_executable(cone_finder src/cone_finder.cpp src/tools.cpp)
-add_executable(search_target src/search_target.cpp src/tools.cpp)
-add_executable(search_target_test src/search_target_test.cpp src/tools.cpp)
+add_executable(cone_finder src/cone_finder.cpp src/tools.cpp src/core_search_target.cpp)
+add_executable(search_target src/search_target.cpp src/tools.cpp src/core_search_target.cpp)
+add_executable(search_target_test src/search_target_test.cpp src/tools.cpp src/core_search_target.cpp)
 
 ament_target_dependencies(cone_finder 
 visualization_msgs

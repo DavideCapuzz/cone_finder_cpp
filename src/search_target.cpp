@@ -83,125 +83,13 @@ void SearchTarget::continuosCallback()
   // check if the messages is update  
   if (continuos_call_back_ && check_time(msgs_time_)) // TODO: check if all the information are updated
   {
-    // find camera position inside the costmap
-    cv::Point bot_pos = cv::Point(r_bot_, c_bot_);
-    // find the closet point, 1 right, -1 left
-    cv::Point p_lateral = tools_.rotate_point_on_image(cv::Point(r_bot_, search_dir_ * 500), bot_pos, rotation_angle_);
-    // se a front point of the direction of the robot
-    cv::Point p_front = tools_.rotate_point_on_image(cv::Point(r_bot_, c_bot_ + 5), bot_pos, rotation_angle_ - 90);
-    if (dev_mode_ > 0)
-    {
-      RCLCPP_INFO(this->get_logger(), "%d, %d %d %d ", bot_pos.x, bot_pos.y, p_lateral.x, p_lateral.y);
-    }
-    if (oc_.p_100_.size() > 0) // check if the cost map has some obstacles
-    {
-      double distance{0};
-      // groups all the lines in contours
-      cv::Point closest_point;
-      tools_.find_nearest_point_2_segment2(closest_point, distance, oc_.p_100_, bot_pos, p_lateral);
-      if (dev_mode_ > 0)
-      {
-        RCLCPP_INFO(this->get_logger(), "cp %d %d %f ", closest_point.x, closest_point.y, tools_.distance_points(bot_pos, closest_point) );
-      }
-
-      std::vector<cv::Point> line;
-
-      if (tools_.distance_points(bot_pos, closest_point) > 0)
-      {
-        if (dev_mode_ > 0)
-        {
-          oc_.im_occgrid_.at<cv::Vec3b>(closest_point) = cv::Vec3b(250, 0, 0);
-        }
-        bool result{false};
-        double next_i = closest_point.x;
-        double next_j = closest_point.y;
-        //kernel_.flip();     
-        kernel_.set_angle(rotation_angle_+angle_offset_);
-        double r {};
-        do
-        {
-          if (line.size()>3)
-          {            
-            // if line greater than 3 use the direction of the line otherwise use the direction of the robot
-            if ((line[line.size()-3].x - line[line.size()-2].x)!=0)
-            {
-              r = atan((line[line.size()-3].y - line[line.size()-2].y)/(line[line.size()-3].x - line[line.size()-2].x)) * 180 / 3.14;
-            }
-            else if ((line[line.size()-3].y - line[line.size()-2].y)>0)
-            {
-              r = 90;
-            } else {
-              r = 270;
-            }            
-            kernel_.set_angle(r);
-          }
-          Matrix<5> c_m{};
-          for (int i = -2; i < 2; i++)
-          {
-            for (int j = -2; j < 2; j++)
-            {
-              c_m[2 + i][2 + j] = oc_.matrix_.matrix_(static_cast<int>(next_i) + i, static_cast<int>(next_j) + j);
-              oc_.im_occgrid_.at<cv::Vec3b>(
-                cv::Point(static_cast<int>(next_i) +i, static_cast<int>(next_j) + j)) = cv::Vec3b(250*c_m[2 + i][2 + j], 0, 0);              
-            }
-          }
-          double i_r;
-          double j_r;
-          std::tie(result, i_r, j_r) = kernel_.evalute_next_point(c_m);
-          
-          next_i = next_i + i_r-2;
-          next_j = next_j + j_r-2;
-
-          if (result){
-            line.push_back(cv::Point(next_i, next_j));
-          }
-          if (dev_mode_ > 0)
-          {
-            RCLCPP_INFO(this->get_logger(), "r %d %f %f", result, next_i, next_j);
-          }
-
-          if (dev_mode_ > 0)
-          {
-            oc_.im_occgrid_.at<cv::Vec3b>(cv::Point(next_i, next_j)) = cv::Vec3b(0, 250, 0);
-          }
-        } while (result);
-        RCLCPP_INFO(this->get_logger(), "rot %f %f %f", rotation_angle_, next_i, next_j);
-        if (line.size()>5)
-        {
-          int last_idx = line.size() - 1;  
-          cv::Point p_t1 = line.back();;
-          cv::Point p_t2 = (line[last_idx-1]+line[last_idx-2]+line[last_idx-3])/3;
-            
-
-          // find the point that is at a distance x to the fartest point of the robot in the direction of the research
-          cv::Point p_t3 = tools_.find_points_at_distance_X2(p_t1, p_t2, distance_wall_, bot_pos); // not working well need to fix
-          // translate the point from image to occupancy grid
-          //cv::Point p_t = tools_.cvpoint_2_grid(p_t3, oc_.grid_.info.height);
-          tools_.map_2_position(p_t3.x, p_t3.y, oc_.map_res_, oc_.map_x0_, oc_.map_y0_, p_target_);
-          if (dev_mode_ > 0)
-          {
-            cv::line (oc_.im_occgrid_, p_t1, p_t3, cv::Vec3b(255, 0, 255), 1); // purple
-            cv::circle (oc_.im_occgrid_, p_t1, 4, cv::Vec3b(0, 255, 255), 3, cv::LINE_8); // yellow
-            cv::circle (oc_.im_occgrid_, p_t2, 4, cv::Vec3b(0, 255, 0), 3, cv::LINE_8); // green
-            cv::circle (oc_.im_occgrid_, p_t3, 4, cv::Vec3b(255, 255, 0), 3, cv::LINE_8); // liht blue
-          }
-        }
-      }
-    }
+    p_target_ = core_.update(
+      r_bot_, c_bot_, rotation_angle_, distance_wall_, search_dir_,
+      angle_offset_, kernel_, dev_mode_);
 
     std::vector<geometry_msgs::msg::Point> pp;
     pp.push_back(p_target_);
     publish_marker(pp);
-
-    if (dev_mode_ > 0)
-    {
-      cv::line(oc_.im_occgrid_, bot_pos, p_lateral, cv::Vec3b(255, 0, 0), 1); // blue
-      cv::line(oc_.im_occgrid_, bot_pos, p_front, cv::Vec3b(0, 0, 255), 1);   // red
-
-      cv::imshow("Image window", oc_.im_occgrid_);
-
-      cv::waitKey(3);      
-    }
   }
 }
 
@@ -221,7 +109,7 @@ bool SearchTarget::check_time(std::array<std::chrono::time_point<std::chrono::sy
 
 void SearchTarget::costmap_cb(const nav_msgs::msg::OccupancyGrid::SharedPtr msg_in)
 {
-  oc_ = {*msg_in};  
+  core_.oc_ = {*msg_in};  
   msgs_time_[0] = std::chrono::system_clock::now();;
 }
 
@@ -244,7 +132,7 @@ void SearchTarget::odom_cb(const nav_msgs::msg::Odometry::SharedPtr msg_in)
 
   try
   {
-    tools_.position_2_map(bot_pose_.position, oc_.map_res_, oc_.map_x0_, oc_.map_y0_, r_bot_, c_bot_);
+    tools_.position_2_map(bot_pose_.position, core_.oc_.map_res_, core_.oc_.map_x0_, core_.oc_.map_y0_, r_bot_, c_bot_);
     rotation_angle_ = 2 * acos(bot_pose_.orientation.w) * 180 / 3.14;
     //RCLCPP_INFO(this->get_logger(), "rot %f or %f", rotation_angle_, bot_pose_.orientation.w);
   }
@@ -266,7 +154,7 @@ void SearchTarget::get_search_target_server(const std::shared_ptr<interfaces::sr
     response->target = p_target_;
     if (dev_mode_ > 0)
     {
-      RCLCPP_INFO(this->get_logger(), "%f %f", p_target_.x * oc_.map_res_ + oc_.map_x0_, p_target_.y * oc_.map_res_ + oc_.map_y0_);
+      RCLCPP_INFO(this->get_logger(), "%f %f", p_target_.x * core_.oc_.map_res_ + core_.oc_.map_x0_, p_target_.y * core_.oc_.map_res_ + core_.oc_.map_y0_);
     }
   }
   else
@@ -281,9 +169,10 @@ void SearchTarget::get_search_target_server(const std::shared_ptr<interfaces::sr
 
 void SearchTarget::save_cost_map_server(const std::shared_ptr<interfaces::srv::SaveCostMap::Request> request,
                                             std::shared_ptr<interfaces::srv::SaveCostMap::Response> response)
-{
-  if (tools_.WriteMapToYaml(request->name, oc_.grid_))
+{  
+  if (check_time(msgs_time_))
   {
+    tools_.WriteMapToYaml(request->name,bot_pose_ , core_.oc_.grid_);
     // RCLCPP_INFO(this->get_logger(), " founded !!");
     response->result = true;
   }

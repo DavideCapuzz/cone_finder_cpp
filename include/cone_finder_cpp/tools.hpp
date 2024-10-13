@@ -71,8 +71,8 @@ public:
   cv::Point cvpoint_2_grid(cv::Point p, size_t grid_height);
 
   bool WriteMapToImage(std::string & name, nav_msgs::msg::OccupancyGrid & map);
-  bool WriteMapToYaml(std::string & name, nav_msgs::msg::OccupancyGrid & map);
-  bool DecodeYamlToMap(std::string & name, nav_msgs::msg::OccupancyGrid & map);
+  bool WriteMapToYaml(std::string & name, geometry_msgs::msg::Pose &bot_pose, nav_msgs::msg::OccupancyGrid & map);
+  bool DecodeYamlToMap(std::string & name, geometry_msgs::msg::Pose &bot_pose, nav_msgs::msg::OccupancyGrid & map);
 };
 
 template <int Size>
@@ -127,10 +127,10 @@ class Kernel {
     void set_angle(double ang) {
         if (get_class(ang) != class_) {
             class_ = get_class(ang);
-            shift(class_);
             if (debug) {
                 std::cout << "new class " << class_ << '\n';
             }
+            shift(class_);
         } else {
             if (debug) {
                 std::cout << "old class " << class_ << '\n';
@@ -140,11 +140,11 @@ class Kernel {
 
     void flip()
     {
-        for (int i = 0; i < (Size-1)/2; i++) {
-            for (int j = 0; j < Size; j++) {
+        for (int i = 0; i < Size; i++) {
+            for (int j = 0; j < (Size-1)/2; j++) {
                 double a = kernel_original_[i][j];
-                kernel_original_[i][j] = kernel_original_[Size-i-1][j];
-                kernel_original_[Size-i-1][j] = a;
+                kernel_original_[i][j] = kernel_original_[i][Size-1-j];
+                kernel_original_[i][Size-j-1] = a;
             }
         }
     }
@@ -181,6 +181,12 @@ class Kernel {
     void shift(int shift) {
         std::vector<double> a;
         for (int i = 0; i < static_cast<int>(Size / 2); i++) {
+            if (debug) {
+                    std::cout << i << '\n';
+                }
+            if (debug) {
+                    std::cout << "a\n";
+                }
             for (int j = i; j < Size - i; j++) {
                 a.push_back(kernel_original_[i][j]);
                 if (debug) {
@@ -188,6 +194,7 @@ class Kernel {
                               << kernel_original_[i][j] << '\n';
                 }
             }
+            if (debug) { std::cout << "b\n";}
             for (int j = i + 1; j < Size - i - 1; j++) {
                 a.push_back(kernel_original_[j][Size - i - 1]);
                 if (debug) {
@@ -195,6 +202,7 @@ class Kernel {
                               << kernel_original_[j][Size - i - 1] << '\n';
                 }
             }
+            if (debug) { std::cout << "c\n";}
             for (int j = Size - i - 1; j >= i; j--) {
                 a.push_back(kernel_original_[Size - i - 1][j]);
                 if (debug) {
@@ -202,19 +210,20 @@ class Kernel {
                               << kernel_original_[Size - i - 1][j] << '\n';
                 }
             }
-            for (int j = Size - i - 1; j > i; j--) {
+            if (debug) { std::cout << "d\n";}
+            for (int j = Size - i - 2; j > i; j--) {
                 a.push_back(kernel_original_[j][i]);
                 if (debug) {
                     std::cout << j << "\t" << i << "\t"
                               << kernel_original_[j][i] << '\n';
                 }
             }
+            
+            int s = static_cast<int>(fmod((Size / 2 - i)* shift+a.size(), a.size())  );
             if (debug) {
-                std::cout << "oh1 "
-                          << (static_cast<int>((Size) / 2) - i) * shift << '\n';
+                std::cout << "oh1 "<<s<<"\n";
             }
-            for (int j = 0; j < (static_cast<int>((Size) / 2) - i) * shift;
-                 j++) {
+            for (int j = 0; j < s; j++) {
                 double el = a.back();
                 a.insert(a.begin(), el);
                 a.pop_back();
@@ -222,9 +231,7 @@ class Kernel {
                     std::cout << el << '\n';
                 }
             }
-            if (debug) {
-                std::cout << "oh2" << '\n';
-            }
+            if (debug) { std::cout << "a\n";}
             for (int j = i; j < Size - i; j++) {
                 kernel_[i][j] = a.front();
                 a.erase(a.begin());
@@ -233,6 +240,7 @@ class Kernel {
                               << '\n';
                 }
             }
+            if (debug) { std::cout << "b\n";}
             for (int j = i + 1; j < Size - i - 1; j++) {
                 kernel_[j][Size - i - 1] = a.front();
                 a.erase(a.begin());
@@ -241,6 +249,7 @@ class Kernel {
                               << kernel_[j][Size - i - 1] << '\n';
                 }
             }
+            if (debug) { std::cout << "c\n";}
             for (int j = Size - i - 1; j >= i; j--) {
                 kernel_[Size - i - 1][j] = a.front();
                 a.erase(a.begin());
@@ -249,7 +258,8 @@ class Kernel {
                               << kernel_[Size - i - 1][j] << '\n';
                 }
             }
-            for (int j = Size - i - 1; j > i; j--) {
+            if (debug) { std::cout << "d\n";}
+            for (int j = Size - i - 2; j > i; j--) {
                 kernel_[j][i] = a.front();
                 a.erase(a.begin());
                 if (debug) {
@@ -273,9 +283,16 @@ public:
             if (occupancyGrid.data[i] == 100)
             {
                 // Correct indexing logic (row-major order)
-                int col = static_cast<int>(i % width);
-                int row = static_cast<int>(i / width);
+                int col = static_cast<int>(i / width);
+                int row = static_cast<int>(i % width);
                 matrix_(row, col) = 100;
+            }
+            else {
+                
+                // Correct indexing logic (row-major order)
+                int col = static_cast<int>(i / width);
+                int row = static_cast<int>(i % width);
+                matrix_(row, col) = 0;
             }
         }
     }

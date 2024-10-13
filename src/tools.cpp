@@ -99,6 +99,54 @@ cv::Point ToolsCam::find_points_at_distance_X(const cv::Point& A, const cv::Poin
 
 cv::Point ToolsCam::find_points_at_distance_X2(const cv::Point& A, const cv::Point& B, double d, const cv::Point& Pbot) {
     // Calculate the midpoint between A and B
+    // double mid_x = (A.x + B.x) / 2;
+    // double mid_y = (A.y + B.y) / 2;
+    cv::Point P1{};
+    cv::Point P2{};
+
+    double m{0.0};
+    if ((B.x - A.x)!=0)
+    {      
+      m = - (B.y - A.y) / (B.x - A.x);
+      if (m != 0)
+      {
+        double q = A.y - m * A.x;
+        double k = q - A.y;
+        double a = 1 + std::pow(m, 2);
+
+        double b = 2 * (-A.x + m *k);
+        double c = std::pow(A.x, 2) - std::pow(d, 2) + std::pow(k, 2);
+        
+        P1.x = (-b + std::sqrt(std::pow(b, 2) - 4*a*c)) / (2 * a);
+        P2.x = (-b - std::sqrt(std::pow(b, 2) - 4*a*c)) / (2 * a);
+        P1.y = m * P1.x + q;
+        P2.y = m * P2.x + q;
+        //std::cout << m << "  " << q << "  " << k << "  " << a << "  " << b << " " << c << " " << "\n"; 
+      }
+      else{
+        P1.x = A.x;
+        P2.x = A.x;
+        P1.y = A.y+d;
+        P2.y = A.y-d;
+      }
+      
+    }
+    else{
+      P1.x = A.x + d ;
+      P2.x = A.x - d;
+      P1.y = A.y;
+      P2.y = A.y;
+    }   
+    //std::cout<<A.x<<"  "<<A.y<<"  "<<B.x<<" "<<B.y<<" "<<"\n"; 
+    //std::cout<<P1.x<<"  "<<P1.y<<"  "<<P2.x<<" "<<P2.y<<" "<<distance_points(Pbot, P1) <<" "<<distance_points(Pbot, P2) <<"\n"; 
+
+    if (distance_points(Pbot, P1) > distance_points(Pbot, P2))
+    {
+      return P2;
+    } else {
+      return P1;
+    }
+    /*// Calculate the midpoint between A and B
     double mid_x = (A.x + B.x) / 2;
     double mid_y = (A.y + B.y) / 2;
     cv::Point P1{};
@@ -140,7 +188,7 @@ cv::Point ToolsCam::find_points_at_distance_X2(const cv::Point& A, const cv::Poi
       return P2;
     } else {
       return P1;
-    }
+    }*/
 }
 
 
@@ -311,11 +359,17 @@ bool ToolsCam::WriteMapToImage(std::string &name,
   return true;
 }
 
-bool ToolsCam::WriteMapToYaml(std::string &name,
+bool ToolsCam::WriteMapToYaml(std::string &name, geometry_msgs::msg::Pose &bot_pose,
   nav_msgs::msg::OccupancyGrid & map)
 {
   YAML::Emitter out;
   out << YAML::BeginMap;
+  out << YAML::Key << "bot_x";
+  out << YAML::Value << bot_pose.position.x;
+  out << YAML::Key << "bot_y";
+  out << YAML::Value << bot_pose.position.y;
+  out << YAML::Key << "bot_heading";
+  out << YAML::Value << bot_pose.orientation.w;
   out << YAML::Key << "frame_id";
   out << YAML::Value << map.header.frame_id;
   out << YAML::Key << "resolution";
@@ -343,11 +397,14 @@ bool ToolsCam::WriteMapToYaml(std::string &name,
   return true;
 }
 
-bool ToolsCam::DecodeYamlToMap(std::string &name,
+bool ToolsCam::DecodeYamlToMap(std::string &name, geometry_msgs::msg::Pose &bot_pose,
   nav_msgs::msg::OccupancyGrid & map)
 {
   YAML::Node config = YAML::LoadFile(name);
   // nav_msgs::msg::OccupancyGrid & map;
+  bot_pose.position.x = config["bot_x"].as<double>();
+  bot_pose.position.y = config["bot_y"].as<double>();
+  bot_pose.orientation.w = config["bot_heading"].as<double>();
   map.header.frame_id = config["frame_id"].as<std::string>();
   map.info.resolution = config["resolution"].as<float>();
   map.info.origin.position.x = config["origin_x"].as<double>();
@@ -356,7 +413,7 @@ bool ToolsCam::DecodeYamlToMap(std::string &name,
   map.info.width = config["width"].as<double>();
   map.data.resize(map.info.width * map.info.height);
   for (std::size_t i = 0; i < config["data"].size(); ++i) {
-      map.data[i] = config["data"][i].as<double>();  // Assign YAML node value to the array
+      map.data[i] = config["data"][i].as<int8_t>();  // Assign YAML node value to the array    
   }
 
   std::cout << "[INFO] [map_io]: Map loaded " << name<<std::endl;
