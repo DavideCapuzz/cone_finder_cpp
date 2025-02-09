@@ -19,6 +19,8 @@
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include "interfaces/srv/get_target.hpp"
 #include "cone_finder_cpp/tools.hpp"
+#include "common/common.hpp"
+#include "cone_finder_cpp/core_cone_finder.hpp"
 // next steps 
 // reoreder style
 // remove overlap cones
@@ -37,7 +39,7 @@ public:
 
 private:
   void timer_callback();
-  rclcpp::TimerBase::SharedPtr timer_;
+  rclcpp::TimerBase::SharedPtr main_timer_;
 
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr publisher_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr publisher_maker_;
@@ -61,28 +63,30 @@ private:
   void get_cone_server(const std::shared_ptr<interfaces::srv::GetTarget::Request> request,
           std::shared_ptr<interfaces::srv::GetTarget::Response> response);
 
+  void continuosCallback();
+
   std::shared_ptr<tf2_ros::Buffer> tfBuffer;  
-  ToolsCam tools_{};
+  std::shared_ptr<tf2_ros::TransformListener> listener;
+  ToolsCam tools_{};              // tools cone finder node 
+  Common common_{};              // tools cone finder node 
+  std::vector<std::chrono::time_point<std::chrono::system_clock>> msgs_time_;  
+  CoreConeFinder core_;
+
   std::vector<cv::Point> cone_coords_;
   std::vector<double> cone_x_;
-  size_t count_;
-  std::mutex mtx_fnc_; 
   sensor_msgs::msg::CameraInfo camera_info_;
-  float map_x0_, map_y0_, map_res_;
-  geometry_msgs::msg::Pose bot_pose_, goal_pose_;
-  std::shared_ptr<tf2_ros::TransformListener> listener;
-    
+  geometry_msgs::msg::Point goal_pose_;
+      
   int r_bot_{0}; // = boost::math::iround(-yg);
 	int c_bot_{0}; // = boost::math::iround(xg);
-  float rotation_angle_{0.0};
 
-  rclcpp::Time msgs_time_[4];
-  std::vector<cv::Point> p_nearest_;
   // 0 sub_image_
   // 1 sub_cam_info_
   // 2 sub_costmap_
   // 3 sub_odometry_
+  bool continuos_call_back_{true};
   int dev_mode_{1};
+  cv::Mat in_image_;
 };
 
 #endif

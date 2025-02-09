@@ -29,16 +29,35 @@ SearchTarget::SearchTarget()
   tf_buffer_->setCreateTimerInterface(timer_interface);
   listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
+  // parameters
+  this->declare_parameter("dev_mode_", 0);
+  this->declare_parameter("distance_wall_", 0.5);
+  this->declare_parameter("search_dir_", 1);
+  this->declare_parameter("continuos_call_back_", true);
+  this->declare_parameter("angle_offset_", 0.0);
+
+  this->declare_parameter("topic_map", "/map");
+  this->declare_parameter("topic_odom", "/odom");
+
+  std::string topic_map = this->get_parameter("topic_map").as_string();
+  std::string topic_odom = this->get_parameter("topic_odom").as_string();
+  dev_mode_ = this->get_parameter("dev_mode_").as_int();
+  distance_wall_ = this->get_parameter("distance_wall_").as_double();
+  search_dir_ = this->get_parameter("search_dir_").as_int();
+  continuos_call_back_ = this->get_parameter("continuos_call_back_").as_bool();
+  angle_offset_ = this->get_parameter("angle_offset_").as_double();
+  RCLCPP_INFO(this->get_logger(), "dev_mode  %d", dev_mode_);
+
   // ros interfaaces
   sub_costmap_ = this->create_subscription<nav_msgs::msg::OccupancyGrid>(
-      "/costmap", 10, std::bind(&SearchTarget::costmap_cb, this, _1));
+      topic_map, 10, std::bind(&SearchTarget::costmap_cb, this, _1));
   sub_odometry_ = this->create_subscription<nav_msgs::msg::Odometry>(
-      "/odom", 10, std::bind(&SearchTarget::odom_cb, this, _1));
+      topic_odom, 10, std::bind(&SearchTarget::odom_cb, this, _1));
 
   srv_get_target_ = this->create_service<interfaces::srv::GetTarget>(
       "/get_trg_fnd_pos", std::bind(&SearchTarget::get_search_target_server, this, _1, _2));
-  srv_save_cost_map_ = this->create_service<interfaces::srv::SaveCostMap>(
-      "/save_cost_map", std::bind(&SearchTarget::save_cost_map_server, this, _1, _2));
+  srv_save_status_ = this->create_service<interfaces::srv::SaveStatus>(
+      "/save_status_search_target", std::bind(&SearchTarget::save_status_server, this, _1, _2));
 
   publisher_maker_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(
       "/target_pos_array", 10);
@@ -47,25 +66,13 @@ SearchTarget::SearchTarget()
     std::chrono::milliseconds(25),
     std::bind(&SearchTarget::continuosCallback, this));
 
-  // parameters
-  this->declare_parameter("dev_mode_", 0);
-  this->declare_parameter("distance_wall_", 0.5);
-  this->declare_parameter("search_dir_", 1);
-  this->declare_parameter("continuos_call_back_", true);
-  this->declare_parameter("angle_offset_", 0.0);
-
-  dev_mode_ = this->get_parameter("dev_mode_").as_int();
-  distance_wall_ = this->get_parameter("distance_wall_").as_double();
-  search_dir_ = this->get_parameter("search_dir_").as_int();
-  continuos_call_back_ = this->get_parameter("continuos_call_back_").as_bool();
-  angle_offset_ = this->get_parameter("angle_offset_").as_double();
-  RCLCPP_INFO(this->get_logger(), "dev_mode  %d", dev_mode_);
-
   // intialize all
   if (dev_mode_ > 0)
   {
     cv::namedWindow("Image window");
   }
+
+  msgs_time_.resize(2);
 
   RCLCPP_INFO(this->get_logger(), "start search target");
 }
@@ -81,36 +88,30 @@ SearchTarget::~SearchTarget()
 void SearchTarget::continuosCallback()
 {
   // check if the messages is update  
-  if (continuos_call_back_ && check_time(msgs_time_)) // TODO: check if all the information are updated
+  if (continuos_call_back_ && common_.check_time(msgs_time_)) // TODO: check if all the information are updated
   {
     p_target_ = core_.update(
-      r_bot_, c_bot_, rotation_angle_, distance_wall_, search_dir_,
+      r_bot_, c_bot_, core_.odom_.rotation_angle_, distance_wall_, search_dir_,
       angle_offset_, kernel_, dev_mode_);
-
+    // if (p_target_.x ==0 && p_target_.y==0)
+    // {
+    //   p_target_.x = p_target_.x + 1.5 * cos((core_.odom_.rotation_angle_ - 90)* M_PI / 180.0);
+    //   p_target_.y = p_target_.y + 1.5 * sin((core_.odom_.rotation_angle_ - 90)* M_PI / 180.0);
+    // }
     std::vector<geometry_msgs::msg::Point> pp;
     pp.push_back(p_target_);
     publish_marker(pp);
   }
 }
 
-bool SearchTarget::check_time(std::array<std::chrono::time_point<std::chrono::system_clock>, 2> & msgs_time)
-{
-  bool flag{true};
-  for (size_t i = 0; i < msgs_time.size(); ++i) {
-        // Capture the current time and store it in the array+        
-        if (std::chrono::duration_cast<std::chrono::milliseconds>(
-          std::chrono::system_clock::now()-msgs_time[i]).count()>300)
-        {
-          flag = false;
-        }
-    }
-  return flag;
-}
-
 void SearchTarget::costmap_cb(const nav_msgs::msg::OccupancyGrid::SharedPtr msg_in)
 {
-  core_.oc_ = {*msg_in};  
-  msgs_time_[0] = std::chrono::system_clock::now();;
+  if (msg_in->info.height !=0 && msg_in->info.width !=0)
+  {
+    core_.oc_ = {*msg_in}; 
+  }
+  msgs_time_[0] = std::chrono::system_clock::now();
+
 }
 
 void SearchTarget::publish_marker(std::vector<geometry_msgs::msg::Point> &p_vector)
@@ -124,16 +125,15 @@ void SearchTarget::publish_marker(std::vector<geometry_msgs::msg::Point> &p_vect
 
 void SearchTarget::odom_cb(const nav_msgs::msg::Odometry::SharedPtr msg_in)
 {
-  msgs_time_[1] = std::chrono::system_clock::now();;
-  bot_pose_.position = msg_in->pose.pose.position;
-  bot_pose_.orientation = msg_in->pose.pose.orientation;
+  msgs_time_[1] = std::chrono::system_clock::now();
+
   // https://www.euclideanspace.com/maths/geometry/rotations/conversions/quaternionToAngle/index.htm
   geometry_msgs::msg::TransformStamped transformCamera;
+  core_.odom_ = {*msg_in};
 
   try
   {
-    tools_.position_2_map(bot_pose_.position, core_.oc_.map_res_, core_.oc_.map_x0_, core_.oc_.map_y0_, r_bot_, c_bot_);
-    rotation_angle_ = 2 * acos(bot_pose_.orientation.w) * 180 / 3.14;
+    tools_.position_2_map(core_.odom_.pose_.position, core_.oc_.map_res_, core_.oc_.map_x0_, core_.oc_.map_y0_, r_bot_, c_bot_);
     //RCLCPP_INFO(this->get_logger(), "rot %f or %f", rotation_angle_, bot_pose_.orientation.w);
   }
   catch (tf2::TransformException &ex)
@@ -152,7 +152,7 @@ void SearchTarget::get_search_target_server(const std::shared_ptr<interfaces::sr
     // RCLCPP_INFO(this->get_logger(), " founded !!");
     response->result = true;
     response->target = p_target_;
-    if (dev_mode_ > 0)
+    if (dev_mode_ > 1)
     {
       RCLCPP_INFO(this->get_logger(), "%f %f", p_target_.x * core_.oc_.map_res_ + core_.oc_.map_x0_, p_target_.y * core_.oc_.map_res_ + core_.oc_.map_y0_);
     }
@@ -167,12 +167,13 @@ void SearchTarget::get_search_target_server(const std::shared_ptr<interfaces::sr
   response->type.data = "Target";
 }
 
-void SearchTarget::save_cost_map_server(const std::shared_ptr<interfaces::srv::SaveCostMap::Request> request,
-                                            std::shared_ptr<interfaces::srv::SaveCostMap::Response> response)
+void SearchTarget::save_status_server(const std::shared_ptr<interfaces::srv::SaveStatus::Request> request,
+                                            std::shared_ptr<interfaces::srv::SaveStatus::Response> response)
 {  
-  if (check_time(msgs_time_))
+  if (common_.check_time(msgs_time_))
   {
-    tools_.WriteMapToYaml(request->name,bot_pose_ , core_.oc_.grid_);
+    common_.WriteMapToYaml(request->name, core_.oc_.grid_);
+    common_.WritePoseToYaml(request->name, core_.odom_.pose_);
     // RCLCPP_INFO(this->get_logger(), " founded !!");
     response->result = true;
   }

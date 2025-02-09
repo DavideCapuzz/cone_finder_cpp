@@ -25,23 +25,35 @@
 
 #include "cone_finder_cpp/tools.hpp"
 
-#ifndef CoreSearchTarget_H
-#define CoreSearchTarget_H
+#ifndef CoreConeFinder_H
+#define CoreConeFinder_H
 
-class CoreSearchTarget
+class CoreConeFinder
 {
 public:
-	CoreSearchTarget(){};
-	~CoreSearchTarget(){};
+	CoreConeFinder(){};
+	~CoreConeFinder(){};
  
   geometry_msgs::msg::Point update(
-    int r_bot, int c_bot, float rotation_angle, double  distance_wall, int search_dir,
-    double angle_offset, Kernel<5> & kernel, int dev_mode = 0
-  );
+    cv::Mat in_image, 
+    sensor_msgs::msg::CameraInfo & camera_info, int r_bot, int c_bot,
+    vision_msgs::msg::BoundingBox2DArray & BB_array, int dev_mode=0);
+
+  geometry_msgs::msg::Point find_cone_pose(int r_bot, int c_bot, 
+  std::vector<double> & cone_x, int dev_mode);
+
+  bool find_cone(
+  cv::Mat & in_image, 
+  sensor_msgs::msg::CameraInfo & camera_info,
+  std::vector<cv::Point> & cone_coords, 
+  std::vector<double> & cone_x,
+  vision_msgs::msg::BoundingBox2DArray & BB_array, int dev_mode);
+
+  bool pointingUp(std::vector<cv::Point> hull_in);
+  bool find_cone(cv::Mat in_image);
   ToolsCam tools_{};
   OccupancyGrid oc_{};
   BotOdom odom_{};
-  Common common_{}; 
 };
 
 #endif
