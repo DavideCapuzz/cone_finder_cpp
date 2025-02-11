@@ -26,6 +26,26 @@
 #ifndef ToolsCam_H
 #define ToolsCam_H
 
+struct Point
+{
+    Point(
+        int x,
+        int y) : x_(x),
+                 y_(y)
+    {
+    }
+
+    Point(
+        double x,
+        double y) : x_(static_cast<int>(x + 0.5)),
+                    y_(static_cast<int>(y + 0.5))
+    {
+    }
+
+    int x_;
+    int y_;
+};
+
 class ToolsCam
 {
 public:

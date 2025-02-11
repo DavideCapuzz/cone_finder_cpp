@@ -50,10 +50,14 @@ geometry_msgs::msg::Point CoreSearchTarget::update(
       double next_i = closest_point.x;
       double next_j = closest_point.y;
       // core_.flip();     if (dev_mode > 1)
-// oc_.matrix_.matrix_(static_cast<int>(next_j), static_cast<int>(next_i))=255;
+      // oc_.matrix_.matrix_(static_cast<int>(next_j), static_cast<int>(next_i))=255;
       if (dev_mode > 0)
       {
-        cv::imshow("Image window2", common_.zoom_image(oc_.matrix_.to_image(), 20.0));
+        std::cout<<"next_i "<<next_i<<"    next_j "<<next_j<<"\n";
+        cv::Mat oh = oc_.matrix_.to_image();
+        oh.at<cv::Vec3b>(cv::Point(static_cast<int>(next_i), static_cast<int>(next_j))) = cv::Vec3b(0, 255, 0);
+          
+        cv::imshow("Image window2", common_.zoom_image(oh, 20.0));
         cv::waitKey(0);
       }
 
@@ -63,7 +67,7 @@ geometry_msgs::msg::Point CoreSearchTarget::update(
       int iterations{0};
       if (dev_mode > 1)
       {
-        std::cout<<"starting matrix\n";
+        std::cout << "starting matrix\n";
         kernel.print_mat();
       }
       do
@@ -91,13 +95,13 @@ geometry_msgs::msg::Point CoreSearchTarget::update(
         {
           kernel.set_angle(rotation_angle);
         }
-        std::cout<<"start for\n";
-        for (int i = -2; i <= 2; i++)
+        std::cout << "start for\n";
+        for (int j = -2; j <= 2; j++)
         {
-          for (int j = -2; j <= 2; j++)
+          for (int i = -2; i <= 2; i++)
           {
-            std::cout<<"i "<<2 + i<<" j "<<2 + j<<" i "<<static_cast<int>(next_i) + i<<" j "<<static_cast<int>(next_j) + j
-            <<" v "<< oc_.matrix_.matrix_(static_cast<int>(next_i) + i, static_cast<int>(next_j) + j)<<"\n";
+            std::cout << "i " << 2 + i << " j " << 2 + j << " i " << static_cast<int>(next_i) + i << " j " << static_cast<int>(next_j) + j
+                      << " v " << oc_.matrix_.matrix_(static_cast<int>(next_i) + i, static_cast<int>(next_j) + j) << "\n";
             c_m[2 + i][2 + j] = oc_.matrix_.matrix_(static_cast<int>(next_i) + i, static_cast<int>(next_j) + j);
             oc_.im_occgrid_.at<cv::Vec3b>(
                 cv::Point(static_cast<int>(next_i) + i, static_cast<int>(next_j) + j)) = cv::Vec3b(250 * c_m[2 + i][2 + j], 0, 0);
@@ -144,17 +148,17 @@ geometry_msgs::msg::Point CoreSearchTarget::update(
         }
         if (dev_mode > 1)
         {
-          std::cout<<"print kernel "<<iterations<<"\n";
+          std::cout << "print kernel " << iterations << "\n";
           kernel.print_mat();
-          std::cout<<"print cm matrix\n";
+          std::cout << "print cm matrix\n";
           c_m.printMatrix();
         }
       } while (result && iterations < 1000);
       if (dev_mode > 1)
       {
-        std::cout<<"print kernel\n";
+        std::cout << "print kernel\n";
         kernel.print_mat();
-          std::cout<<"print cm matrix\n";
+        std::cout << "print cm matrix\n";
         c_m.printMatrix();
       }
 
