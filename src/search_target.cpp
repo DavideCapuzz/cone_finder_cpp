@@ -43,9 +43,9 @@ SearchTarget::SearchTarget()
   std::string topic_odom = this->get_parameter("topic_odom").as_string();
   params_.dev_mode_ = this->get_parameter("dev_mode_").as_int();
   params_.distance_wall_ = this->get_parameter("distance_wall_").as_double();
-  sparams_.earch_dir_ = this->get_parameter("search_dir_").as_int();
-  params_.continuos_call_back_ = this->get_parameter("continuos_call_back_").as_bool();
-  RCLCPP_INFO(this->get_logger(), "dev_mode  %d", dev_mode_);
+  params_.search_dir_ = this->get_parameter("search_dir_").as_int();
+  continuos_call_back_ = this->get_parameter("continuos_call_back_").as_bool();
+  RCLCPP_INFO(this->get_logger(), "dev_mode  %d", params_.dev_mode_);
 
   // ros interfaaces
   sub_costmap_ = this->create_subscription<nav_msgs::msg::OccupancyGrid>(
@@ -157,7 +157,7 @@ void SearchTarget::get_search_target_server(const std::shared_ptr<interfaces::sr
     // RCLCPP_INFO(this->get_logger(), " founded !!");
     response->result = true;
     response->target = p_target_;
-    if (dev_mode_ > 1)
+    if (params_.dev_mode_ > 1)
     {
       RCLCPP_INFO(this->get_logger(), "%f %f", p_target_.x * core_.oc_.map_res_ + core_.oc_.map_x0_, p_target_.y * core_.oc_.map_res_ + core_.oc_.map_y0_);
     }

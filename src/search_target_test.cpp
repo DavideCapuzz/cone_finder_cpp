@@ -62,7 +62,7 @@ int main(int argc, char *argv[])
   std::cout << "matrix\n";
   // std::cout<<core_.oc_.matrix_.matrix_;
   std::cout << "\n";
-  core_.params_.dev_mode_ = 2;
+  core_.params_.dev_mode_ = 5;
   core_.params_.distance_wall_ = 10;
   core_.params_.search_dir_ = 1; // 1 right, -1 left direction of research
   core_.params_.angle_offset_ = 0.0;
