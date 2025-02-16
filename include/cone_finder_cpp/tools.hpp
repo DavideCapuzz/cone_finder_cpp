@@ -20,8 +20,10 @@
 #include <yaml-cpp/yaml.h>
 
 #include <boost/math/special_functions/round.hpp>
-#include <boost/numeric/ublas/matrix.hpp>
-#include <boost/numeric/ublas/io.hpp>
+#include <Eigen/Dense>
+#include <tuple>
+// #include <boost/numeric/ublas/matrix.hpp>
+// #include <boost/numeric/ublas/io.hpp>
 
 #ifndef ToolsCam_H
 #define ToolsCam_H
@@ -42,6 +44,42 @@ struct Point
     {
     }
 
+    Point() : x_(0), y_(0)
+    {
+    }
+
+    Point operator+(const Point &other) const
+    {
+        return Point(this->x_ + other.x_, this->y_ + other.y_);
+    }
+    Point operator-(const Point &other) const
+    {
+        return Point(this->x_ - other.x_, this->y_ - other.y_);
+    }
+    Point operator*(double other) const
+    {
+        return Point(this->x_ * other, this->y_ * other);
+    }
+    bool operator==(const Point &other) const
+    {
+        return this->x_ == other.x_ && this->y_ == other.y_;
+    }
+    double dot(const Point &other) const
+    {
+        return this->x_ * other.x_ + this->y_ * other.y_;
+    }
+    int row()
+    {
+        return y_;
+    }
+    int col()
+    {
+        return x_;
+    }
+    cv::Point to_cvpoint(){
+        return cv::Point(x_, y_);
+    }
+
     int x_;
     int y_;
 };
@@ -52,14 +90,16 @@ public:
     ToolsCam();
     ~ToolsCam();
 
-    void position_2_map(
-        geometry_msgs::msg::Point p, float map_res, float map_x0, float map_y0, int &ix, int &iy);
+    std::tuple<int, int> position_2_map(
+        geometry_msgs::msg::Point p, float map_res, float map_x0, float map_y0);
 
-    void map_2_position(
-        int ix, int iy, float map_res, float map_x0, float map_y0, geometry_msgs::msg::Point &p);
+    geometry_msgs::msg::Point map_2_position(int ix, int iy, float map_res, float map_x0,  float map_y0);
 
     cv::Point rotate_point_on_image(
         const cv::Point &given_pt, const cv::Point &ref_pt, const double &angle_deg);
+    Point rotate_point_on_image(
+        const Point &given_pt, const Point &ref_pt, const double &angle_deg);
+
     cv::Point find_nearest_point(
         std::vector<cv::Point> &points, cv::Point P1, cv::Point P2);
 
@@ -67,20 +107,29 @@ public:
         cv::Point &nearestPoint, double &min_distance, std::vector<cv::Point> &points, cv::Point P1, cv::Point P2);
     void find_nearest_point_2_segment(
         cv::Point &nearestPoint, double &min_distance, std::vector<cv::Point> &points, cv::Point P1, cv::Point P2);
-    void find_nearest_point_2_segment2(
-        cv::Point &nearestPoint, double &min_distance, std::vector<cv::Point> &points, cv::Point P1, cv::Point P2);
-    void closest_point_on_segment(
-        cv::Point &nearestPoint, double &min_distance, cv::Point P0, cv::Point P1, cv::Point P2);
+    std::tuple<cv::Point, double> find_nearest_point_2_segment2(
+        std::vector<cv::Point> &points, cv::Point P1, cv::Point P2);
+    std::tuple<Point, double> find_nearest_point_2_segment2(
+        std::vector<Point> &points, Point P1, Point P2);
+    std::tuple<cv::Point, double>  closest_point_on_segment(
+        cv::Point P0, cv::Point P1, cv::Point P2);
+    std::tuple<Point, double> closest_point_on_segment(
+        Point P0, Point P1, Point P2);
     double distance_points(
         cv::Point P1, cv::Point P0);
+    double distance_points(
+        Point P1, Point P0);
     cv::Point find_points_at_distance_X(
         const cv::Point &A, const cv::Point &B, double x, const cv::Point &Pbot);
     cv::Point find_points_at_distance_X2(
         const cv::Point &A, const cv::Point &B, double d, const cv::Point &Pbot);
+    Point find_points_at_distance_X2(
+        const Point &A, const Point &B, double d, const Point &Pbot);
 
     void grid_2_image(
         nav_msgs::msg::OccupancyGrid &occupancyGrid, std::vector<cv::Point> &p_100, cv::Mat &c_mat_image, cv::Mat &c_mat_walls);
 
+    Point grid_2_point(int grid_index, size_t grid_width, size_t grid_height);
     cv::Point grid_2_cvpoint(int grid_index, size_t grid_width, size_t grid_height);
     double distance_point_2_line(
         cv::Point P, double m, double q);
@@ -140,6 +189,20 @@ public:
         {
             std::cout << "class " << class_ << '\n';
         }
+    }
+    Kernel()
+        : kernel_{},
+          kernel_original_{kernel_}
+    {
+        if (debug)
+        {
+            std::cout << "class " << class_ << '\n';
+        }
+    }
+
+    void set_kernel(Matrix<Size> &&matrix){
+        kernel_ = matrix;
+        kernel_original_ = matrix;
     }
 
     void print_mat() const { kernel_.printMatrix(); }
@@ -348,6 +411,46 @@ public:
             }
         }
     }
+
+    cv::Mat to_imagegray(){
+        cv::Mat gray_image(cv::Mat::ones(Size, Size, CV_8UC1) * 255);
+        for (int i = 0; i < Size; i++)
+        {
+            for (int j = 0; j < Size; j++)
+            {
+                gray_image.at<uchar>(cv::Point(i,j)) = kernel_[i][j] * 255;
+            }
+        };
+        return gray_image;
+    }
+    cv::Mat to_image(){
+        cv::Mat color_image;
+        cv::cvtColor(to_imagegray(), color_image, cv::COLOR_GRAY2BGR);
+        return color_image;
+    }
+    cv::Mat print_kernel_on_image(cv::Mat image, Point center){
+        // Assuming kernel.to_image() returns a cv::Mat
+        cv::Mat kernel_image = to_image();
+
+        // Define the region of interest (ROI) in image
+        cv::Rect roi(center.x_ - static_cast<int>(Size / 2), center.y_ - static_cast<int>(Size / 2), kernel_image.cols, kernel_image.rows);
+
+        // Ensure the ROI is within the bounds of image
+        if (roi.x >= 0 && roi.y >= 0 && roi.x + roi.width <= image.cols && roi.y + roi.height <= image.rows)
+        {
+          // Copy the kernel_image to the specified ROI in image
+          kernel_image.copyTo(image(roi));
+        }
+        else
+        {
+          std::cerr << "ROI is out of bounds!" << std::endl;
+        }
+        return image;
+    }
+    int size(){
+        return Size;
+    }
+
 };
 
 class BotOdom
@@ -439,9 +542,69 @@ public:
     // Destructor
     ~OccupancyGridMatrix() {}
 
-    int height_;                                   // Store height
-    int width_;                                    // Store width
-    boost::numeric::ublas::matrix<double> matrix_; // Matrix with size (width, height)
+    int height_;             // Store height
+    int width_;              // Store width
+    Eigen::MatrixXd matrix_; // Matrix with size (width, height)
+};
+
+class Grid
+{
+public:
+    // Constructor with width and height
+    Grid(int width, int height) : width_(width), height_(height), grid_(height_, width_)
+    {
+        // std::cout << grid_.cols() << " " << grid_.rows() << "\n";
+    }
+
+    // Default constructor
+    Grid() : width_(0), height_(0), grid_() {}
+
+    // Overload the operator() to access elements (const version)
+    double operator()(int x, int y) const
+    {
+        return grid_(y, x);
+    }
+    double operator()(Point p) const
+    {
+        return grid_(p.y_, p.x_);
+    }
+
+    // Overload the operator() to modify elements
+    double &operator()(int x, int y)
+    {
+        return grid_(y, x);
+    }
+
+    cv::Mat to_image()
+    {
+        cv::Mat image(cv::Mat::zeros(height_, width_, CV_8UC3));
+        for (int i = 0; i < height_; ++i)
+        {
+            for (int j = 0; j < width_; ++j)
+            {
+                // color = cv::Vec3b(std::min(255, color[0]), std::min(255, color[1]), std::min(255, color[2]));
+                image.at<cv::Vec3b>(i,j) = cv::Vec3b(250* grid_(i, j) /100, 0* grid_(i, j) /100, 0* grid_(i, j) /100);
+            }
+        }
+        return image;
+    }
+
+    void print()
+    {
+        for (int i = 0; i < height_; ++i)
+        {
+            for (int j = 0; j < width_; ++j)
+            {
+                std::cout << grid_(i, j) << "\t";
+            }
+            std::cout << "\n";
+        }
+    }
+
+private:
+    int width_;
+    int height_;
+    Eigen::MatrixXd grid_;
 };
 
 class OccupancyGrid
@@ -452,19 +615,35 @@ public:
         : map_res_(occupancyGrid.info.resolution),
           map_x0_(occupancyGrid.info.origin.position.x),
           map_y0_(occupancyGrid.info.origin.position.y),
+          height_(occupancyGrid.info.height),
+          width_(occupancyGrid.info.width),
           grid_(occupancyGrid),
-          im_occgrid_(cv::Mat::zeros(occupancyGrid.info.height, occupancyGrid.info.width, CV_8UC3)),
-          imm_walls_(cv::Mat::zeros(occupancyGrid.info.height, occupancyGrid.info.width, CV_8UC3)),
-          // Initialize matrix_ with the dimensions of the occupancy grid
-          matrix_(occupancyGrid.info.height, occupancyGrid.info.width, occupancyGrid)
-    // matrix_(0, 0, nav_msgs::msg::OccupancyGrid())
+          occgrid_(width_, height_),
+          walls_(width_, height_)
     {
         // Convert from occupancy grid to image
-        tools_.grid_2_image(occupancyGrid, p_100_, im_occgrid_, imm_walls_);
+        std::cout << "width_" << width_ << "   height_" << height_ << "\n";
+        for (u_int i{0}; i < width_ * height_; ++i)
+        {
+            if (grid_.data[i] != 0)
+            {
+                Point p = tools_.grid_2_point(i, width_, height_);
+                // std::cout<<"i"<<i<<"   p.x_"<<p.x_<<"   p.y_"<<p.y_<< "  width" << width_ << "   height" << height_ << "\n";
+                occgrid_(p.x_, p.y_) = grid_.data[i];
+                if (grid_.data[i] == 100)
+                {
+                    walls_(p.x_, p.y_) = grid_.data[i];
+                    p_100_.push_back(p);
+                }
+                else {
+                    walls_(p.x_, p.y_) =0;
+                }
+            }
+        }
     }
 
     // Default constructor
-    OccupancyGrid() : map_res_(0), map_x0_(0), map_y0_(0), matrix_(0, 0, nav_msgs::msg::OccupancyGrid())
+    OccupancyGrid() : map_res_(0), map_x0_(0), map_y0_(0), occgrid_(0, 0), walls_(0, 0)
     {
     }
 
@@ -475,11 +654,13 @@ public:
     float map_res_{};
     float map_x0_{};
     float map_y0_{};
+    int height_{};
+    int width_{};
     nav_msgs::msg::OccupancyGrid grid_{};
-    cv::Mat im_occgrid_{};
-    cv::Mat imm_walls_{};
-    std::vector<cv::Point> p_100_{}; // Vector of the walls points
-    OccupancyGridMatrix matrix_;     // Matrix representing the occupancy grid
+    Grid occgrid_{};
+    Grid walls_{};
+    std::vector<Point> p_100_{}; // Vector of the walls points
+    // OccupancyGridMatrix matrix_; // Matrix representing the occupancy grid
 };
 
 #endif

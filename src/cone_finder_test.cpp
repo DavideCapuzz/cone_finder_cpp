@@ -65,7 +65,7 @@ int main(int argc, char* argv[])
   int r_bot_{0};                  // row the base link of the robot
   int c_bot_{0};                  // column the base link of the robot
   core_.oc_ = {map};  
-  tools_.position_2_map(core_.odom_.pose_.position, core_.oc_.map_res_, core_.oc_.map_x0_, core_.oc_.map_y0_, r_bot_, c_bot_);
+  std::tie(r_bot_, c_bot_) =  tools_.position_2_map(core_.odom_.pose_.position, core_.oc_.map_res_, core_.oc_.map_x0_, core_.oc_.map_y0_);
 
   int dev_mode_ = 10;
 

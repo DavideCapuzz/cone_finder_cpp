@@ -53,23 +53,23 @@ geometry_msgs::msg::Point CoreConeFinder::find_cone_pose(int r_bot, int c_bot,
       if (dev_mode>5){std::cout << "cone x  " << cone << "\n";}
       cv::Point p_t = tools_.rotate_point_on_image(cv::Point(r_bot + cone * 500, 500), Cam_pos, odom_.rotation_angle_ - 90);
       cv::Point p_2 = tools_.rotate_point_on_image(cv::Point(r_bot + cone * 500, 500), Cam_pos, - 90); 
-      cv::line (oc_.im_occgrid_, Cam_pos,p_t, cv::Vec3b(255, 255,0), 1); // LIGHT BLUE
-      cv::line (oc_.im_occgrid_, Cam_pos,p_2, cv::Vec3b(255,0,0), 1); // BLUE
-      cv::Point p = tools_.find_nearest_point(oc_.p_100_, Cam_pos, p_t);
+      // cv::line (oc_.occgrid_, Cam_pos,p_t, cv::Vec3b(255, 255,0), 1); // LIGHT BLUE
+      // cv::line (oc_.occgrid_, Cam_pos,p_2, cv::Vec3b(255,0,0), 1); // BLUE
+      // cv::Point p = tools_.find_nearest_point(oc_.p_100_, Cam_pos, p_t);
       // cv::Point p = tools_.find_nearest_point(oc_.p_100_, Cam_pos, cv::Point(p_front.x * cone + p_front.x, 500));
-      p_nearest.push_back(cv::Point(p.x, p.y));
+      // p_nearest.push_back(cv::Point(p.x, p.y));
     }
-    tools_.map_2_position(p_nearest[0].x, p_nearest[0].y, oc_.map_res_, oc_.map_x0_, oc_.map_y0_, p_target);
+    p_target = tools_.map_2_position(p_nearest[0].x, p_nearest[0].y, oc_.map_res_, oc_.map_x0_, oc_.map_y0_);
   }
 
   if (dev_mode > 0)
   {
     cv::namedWindow("map window");
-    cv::circle (oc_.im_occgrid_, p_nearest[0], 4, cv::Vec3b(0, 255, 0), 4, cv::LINE_8); // green
-    cv::line (oc_.im_occgrid_, Cam_pos, p_front, cv::Vec3b(255,0,255), 1); // PINK
-    cv::line (oc_.im_occgrid_, Cam_pos, p_1, cv::Vec3b(0,0,255), 1); // RED
-    // cv::line (oc_.im_occgrid_, Cam_pos,cv::Point(p_front.x*cone_x[0]+p_front.x,500), cv::Vec3b(0,0,255), 1);
-    cv::imshow("map window", oc_.im_occgrid_);
+    // cv::circle (oc_.occgrid_, p_nearest[0], 4, cv::Vec3b(0, 255, 0), 4, cv::LINE_8); // green
+    // cv::line (oc_.occgrid_, Cam_pos, p_front, cv::Vec3b(255,0,255), 1); // PINK
+    // cv::line (oc_.occgrid_, Cam_pos, p_1, cv::Vec3b(0,0,255), 1); // RED
+    // cv::line (oc_.occgrid_, Cam_pos,cv::Point(p_front.x*cone_x[0]+p_front.x,500), cv::Vec3b(0,0,255), 1);
+    // cv::imshow("map window", oc_.occgrid_);
     
     if (dev_mode >5) { cv::waitKey(0); }
     else { cv::waitKey(3); }

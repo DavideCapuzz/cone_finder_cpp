@@ -171,7 +171,7 @@ void ConeFinder::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg_in)
     tf2::doTransform(bot_camera, bot_camera_tf, transformCamera); // get the pose of the camera
     // RCLCPP_INFO(this->get_logger(), "cam_tf %f %f %f", bot_camera_tf.position.x, bot_camera_tf.position.y, bot_camera_tf.position.z );
     // RCLCPP_INFO(this->get_logger(), "cam    %f %f %f", bot_camera.position.x, bot_camera.position.y, bot_camera.position.z );
-    tools_.position_2_map(bot_camera_tf.position, core_.oc_.map_res_, core_.oc_.map_x0_, core_.oc_.map_y0_, r_bot_, c_bot_);
+    std::tie(r_bot_, c_bot_) = tools_.position_2_map(bot_camera_tf.position, core_.oc_.map_res_, core_.oc_.map_x0_, core_.oc_.map_y0_);
     
     //RCLCPP_INFO(this->get_logger(), " %f ,%f ,%d, %d, %f %f",x_init, y_init, c_bot_, r_bot_, bot_pose_.orientation.w, rotation_angle_);
 

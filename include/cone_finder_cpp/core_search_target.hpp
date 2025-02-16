@@ -24,9 +24,19 @@
 #include <boost/numeric/ublas/io.hpp>
 
 #include "cone_finder_cpp/tools.hpp"
+#include <tuple>
 
 #ifndef CoreSearchTarget_H
 #define CoreSearchTarget_H
+
+struct SearchTargetParams{
+  double  distance_wall_{};
+  int search_dir_{};
+  double angle_offset_{};
+  Kernel<5> kernel_{};
+  int dev_mode_{0};
+  double zoom_{1.0};
+};
 
 class CoreSearchTarget
 {
@@ -35,13 +45,13 @@ public:
 	~CoreSearchTarget(){};
  
   geometry_msgs::msg::Point update(
-    int r_bot, int c_bot, float rotation_angle, double  distance_wall, int search_dir,
-    double angle_offset, Kernel<5> & kernel, int dev_mode = 0
+    int r_bot, int c_bot, float rotation_angle
   );
   ToolsCam tools_{};
   OccupancyGrid oc_{};
   BotOdom odom_{};
-  Common common_{}; 
+  Common common_{};
+  SearchTargetParams params_{};
 };
 
 #endif
