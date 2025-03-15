@@ -59,19 +59,16 @@ int main(int argc, char* argv[])
   CoreConeFinder core_;
   nav_msgs::msg::Odometry odom;
   odom.pose.pose = bot_pose_;
-  core_.odom_ = {odom};
+  BotOdom odom_ = {odom};
   // setup data
-  
-  int r_bot_{0};                  // row the base link of the robot
-  int c_bot_{0};                  // column the base link of the robot
-  core_.oc_ = {map};  
-  std::tie(r_bot_, c_bot_) =  tools_.position_2_map(core_.odom_.pose_.position, core_.oc_.map_res_, core_.oc_.map_x0_, core_.oc_.map_y0_);
+  OccupancyGrid oc_ = {map};  
+  auto p_cam_ =  tools_.position_2_map(odom_.pose_.position, oc_.map_res_, oc_.map_x0_, oc_.map_y0_);
 
   int dev_mode_ = 10;
 
   geometry_msgs::msg::Point p_target_{};  
   vision_msgs::msg::BoundingBox2DArray BB_array;
   std::cout << "loaded complete" << std::endl;
-  p_target_ = core_.update(in_image_, camera_info_, r_bot_, c_bot_, BB_array, dev_mode_);
+  p_target_ = core_.update(in_image_, camera_info_, p_cam_, oc_, odom_, BB_array);
   return 0;
 }

@@ -461,7 +461,7 @@ public:
     {
         pose_ = odom.pose.pose;
         // rotation_angle_ = 2 * acos(pose_.orientation.w) * 180 / 3.14;
-        rotation_angle_ = quaternionToAngleDegrees(odom.pose.pose.orientation);
+        std::tie(rotation_angle_, std::ignore, std::ignore) = quaternionToRPYAngleDegrees(odom.pose.pose.orientation);
     }
 
     BotOdom() : pose_{}, rotation_angle_{} {}
@@ -469,7 +469,7 @@ public:
     geometry_msgs::msg::Pose pose_; // The pose of the bot
     double rotation_angle_;         // The rotation angle in degrees
 
-    double quaternionToAngleDegrees(geometry_msgs::msg::Quaternion q)
+    std::tuple<double, double, double> quaternionToRPYAngle(geometry_msgs::msg::Quaternion q)
     {
         double t0 = +2.0 * (q.w * q.x + q.y * q.z);
         double t1 = +1.0 - 2.0 * (q.x * q.x + q.y * q.y);
@@ -483,7 +483,14 @@ public:
         double t4 = +1.0 - 2.0 * (q.y * q.y + q.z * q.z);
         double yaw_z = atan2(t3, t4);
 
-        return yaw_z * 180 / M_PI;
+        return std::make_tuple(roll_x * 180 / M_PI, pitch_y * 180 / M_PI, yaw_z * 180 / M_PI);
+    }
+
+    std::tuple<double, double, double> quaternionToRPYAngleDegrees(geometry_msgs::msg::Quaternion q)
+    {
+        auto[roll_x, pitch_y, yaw_z] =quaternionToRPYAngle(q);
+
+        return std::make_tuple(roll_x * 180 / M_PI, pitch_y * 180 / M_PI, yaw_z * 180 / M_PI);
     }
 };
 
@@ -623,7 +630,7 @@ public:
     {
         // Convert from occupancy grid to image
         std::cout << "width_" << width_ << "   height_" << height_ << "\n";
-        for (u_int i{0}; i < width_ * height_; ++i)
+        for (int i{0}; i < width_ * height_; ++i)
         {
             if (grid_.data[i] != 0)
             {

@@ -39,26 +39,20 @@ public:
 	~CoreConeFinder(){};
  
   geometry_msgs::msg::Point update(
-    cv::Mat in_image, 
-    sensor_msgs::msg::CameraInfo & camera_info, int r_bot, int c_bot,
-    vision_msgs::msg::BoundingBox2DArray & BB_array=0);
+    cv::Mat &in_image, sensor_msgs::msg::CameraInfo & camera_info, Point &p_cam, OccupancyGrid &oc, BotOdom &odoms,
+    vision_msgs::msg::BoundingBox2DArray & BB_array
+    );
 
-  geometry_msgs::msg::Point find_cone_pose(int r_bot, int c_bot, 
-  std::vector<double> & cone_x);
+private:
+  geometry_msgs::msg::Point find_cone_pose(Point &p_cam, std::vector<double> & cone_x, OccupancyGrid &oc, BotOdom &odom);
 
-  bool find_cone(
-  cv::Mat & in_image, 
-  sensor_msgs::msg::CameraInfo & camera_info,
-  std::vector<Point> & cone_coords, 
-  std::vector<double> & cone_x,
-  vision_msgs::msg::BoundingBox2DArray & BB_array);
+  std::tuple<std::vector<cv::Point>, std::vector<double>, vision_msgs::msg::BoundingBox2DArray> 
+  find_cone(cv::Mat &in_image, sensor_msgs::msg::CameraInfo &camera_info);
 
-  bool pointingUp(std::vector<cv::Point> hull_in);
-  bool find_cone(cv::Mat in_image);
+  bool pointingUp(std::vector<cv::Point> &hull_in);
+  // bool find_cone(cv::Mat &in_image);
   ToolsCam tools_{};
-  OccupancyGrid oc_{};
-  BotOdom odom_{};
-  ConeFinderParams params_{};
+  ConeFinderParams params_{};  //TBD
 };
 
 #endif

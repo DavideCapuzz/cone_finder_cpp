@@ -77,8 +77,9 @@ private:
   sensor_msgs::msg::CameraInfo camera_info_;
   geometry_msgs::msg::Point goal_pose_;
       
-  int r_bot_{0}; // = boost::math::iround(-yg);
-	int c_bot_{0}; // = boost::math::iround(xg);
+  Point p_cam_{};
+  OccupancyGrid oc_{};
+  BotOdom odom_{};
 
   // 0 sub_image_
   // 1 sub_cam_info_
