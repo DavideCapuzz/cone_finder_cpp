@@ -90,7 +90,7 @@ public:
     ToolsCam();
     ~ToolsCam();
 
-    std::tuple<int, int> position_2_map(
+    Point position_2_map(
         geometry_msgs::msg::Point p, float map_res, float map_x0, float map_y0);
 
     geometry_msgs::msg::Point map_2_position(int ix, int iy, float map_res, float map_x0,  float map_y0);

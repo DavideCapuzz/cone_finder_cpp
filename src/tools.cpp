@@ -450,13 +450,13 @@ cv::Point ToolsCam::find_nearest_point(std::vector<cv::Point> &points, cv::Point
   return nearestPoint;
 }
 
-std::tuple<int, int> ToolsCam::position_2_map(geometry_msgs::msg::Point p, float map_res, float map_x0, float map_y0)
+Point ToolsCam::position_2_map(geometry_msgs::msg::Point p, float map_res, float map_x0, float map_y0)
 {
   // translate from xy to r c
   int ix, iy;
   ix = static_cast<int>(round((p.x - map_x0) / map_res));
   iy = static_cast<int>(round((p.y - map_y0) / map_res));
-  return std::make_tuple(ix, iy);
+  return Point{ix, iy};
 }
 
 geometry_msgs::msg::Point ToolsCam::map_2_position(int ix, int iy, float map_res, float map_x0, float map_y0)

@@ -44,14 +44,12 @@ public:
 	CoreSearchTarget(){};
 	~CoreSearchTarget(){};
  
-  geometry_msgs::msg::Point update(
-    int r_bot, int c_bot, float rotation_angle
+  std::tuple<bool, geometry_msgs::msg::Point> update(
+    Point &bot_rc, OccupancyGrid &oc, BotOdom &odom, SearchTargetParams& params
   );
+private:
   ToolsCam tools_{};
-  OccupancyGrid oc_{};
-  BotOdom odom_{};
   Common common_{};
-  SearchTargetParams params_{};
 };
 
 #endif

@@ -14,55 +14,51 @@
 #include "cone_finder_cpp/tools.hpp"
 #include "cone_finder_cpp/core_cone_finder.hpp"
 
-
-geometry_msgs::msg::Point CoreConeFinder::update(
-    cv::Mat in_image, 
-    sensor_msgs::msg::CameraInfo & camera_info, int r_bot, int c_bot,
-    vision_msgs::msg::BoundingBox2DArray & BB_array, int dev_mode)
+SearchTargetParams
+geometry_msgs::msg::Point CoreConeFinder::update(int r_bot, int c_bot, float rotation_angle,
+    vision_msgs::msg::BoundingBox2DArray & BB_array)
 {
   geometry_msgs::msg::Point p_target{}; 
-  std::vector<cv::Point> cone_coords;
+  std::vector<Point> cone_coords;
   std::vector<double> cone_x{};
-  find_cone(in_image, camera_info, cone_coords, cone_x, BB_array,dev_mode);
+  find_cone(in_image, camera_info, cone_coords, cone_x, BB_array);
   
   if (cone_x.size()>0)
   { 
-    p_target = find_cone_pose(r_bot, c_bot, cone_x, dev_mode);
+    p_target = find_cone_pose(r_bot, c_bot, cone_x);
   }
-
 
   return p_target;
 }
 
 geometry_msgs::msg::Point CoreConeFinder::find_cone_pose(int r_bot, int c_bot, 
-  std::vector<double> & cone_x, int dev_mode)
+  std::vector<double> & cone_x)
 {
   // find camera position inside the costmap  
-  geometry_msgs::msg::Point p_target{};    
-  cv::Point Cam_pos = cv::Point(r_bot,c_bot);
+  geometry_msgs::msg::Point p_target{};
+  Point bot_pos{r_bot, c_bot};
 
-  if (dev_mode>5){std::cout<<"r_bot  "<<r_bot<<" c_bot "<<c_bot<<" rot "<<odom_.rotation_angle_<<"\n";}
-  cv::Point p_front = tools_.rotate_point_on_image(cv::Point(r_bot, 500), Cam_pos , odom_.rotation_angle_-90);
-  cv::Point p_1 = tools_.rotate_point_on_image(cv::Point(r_bot, 500), Cam_pos , -90);
+  if (params_.dev_mode_>5){std::cout<<"r_bot  "<<r_bot<<" c_bot "<<c_bot<<" rot "<<odom_.rotation_angle_<<"\n";}
+  Point p_front = tools_.rotate_point_on_image(Point(r_bot, 500), Cam_pos, odom_.rotation_angle_-90);
   //get the angle of the camera position and rotate the point for the line
-  std::vector<cv::Point> p_nearest;
+  std::vector<Point> p_nearest;
   if (oc_.p_100_.size()>0)
   {
     for (double cone : cone_x)
     {
-      if (dev_mode>5){std::cout << "cone x  " << cone << "\n";}
-      cv::Point p_t = tools_.rotate_point_on_image(cv::Point(r_bot + cone * 500, 500), Cam_pos, odom_.rotation_angle_ - 90);
-      cv::Point p_2 = tools_.rotate_point_on_image(cv::Point(r_bot + cone * 500, 500), Cam_pos, - 90); 
+      if (params_.dev_mode_>5){std::cout << "cone x  " << cone << "\n";}
+      Point p_t = tools_.rotate_point_on_image(Point(r_bot + cone * 500, 500), Cam_pos, odom_.rotation_angle_ - 90);
+      Point p_2 = tools_.rotate_point_on_image(Point(r_bot + cone * 500, 500), Cam_pos, - 90); 
       // cv::line (oc_.occgrid_, Cam_pos,p_t, cv::Vec3b(255, 255,0), 1); // LIGHT BLUE
       // cv::line (oc_.occgrid_, Cam_pos,p_2, cv::Vec3b(255,0,0), 1); // BLUE
       // cv::Point p = tools_.find_nearest_point(oc_.p_100_, Cam_pos, p_t);
       // cv::Point p = tools_.find_nearest_point(oc_.p_100_, Cam_pos, cv::Point(p_front.x * cone + p_front.x, 500));
       // p_nearest.push_back(cv::Point(p.x, p.y));
     }
-    p_target = tools_.map_2_position(p_nearest[0].x, p_nearest[0].y, oc_.map_res_, oc_.map_x0_, oc_.map_y0_);
+    p_target = tools_.map_2_position(p_nearest[0].x_, p_nearest[0].y_, oc_.map_res_, oc_.map_x0_, oc_.map_y0_);
   }
 
-  if (dev_mode > 0)
+  if (params_.dev_mode_ > 0)
   {
     cv::namedWindow("map window");
     // cv::circle (oc_.occgrid_, p_nearest[0], 4, cv::Vec3b(0, 255, 0), 4, cv::LINE_8); // green
@@ -71,7 +67,7 @@ geometry_msgs::msg::Point CoreConeFinder::find_cone_pose(int r_bot, int c_bot,
     // cv::line (oc_.occgrid_, Cam_pos,cv::Point(p_front.x*cone_x[0]+p_front.x,500), cv::Vec3b(0,0,255), 1);
     // cv::imshow("map window", oc_.occgrid_);
     
-    if (dev_mode >5) { cv::waitKey(0); }
+    if (params_.dev_mode_ >5) { cv::waitKey(0); }
     else { cv::waitKey(3); }
   }
   return p_target;
@@ -80,9 +76,9 @@ geometry_msgs::msg::Point CoreConeFinder::find_cone_pose(int r_bot, int c_bot,
 bool CoreConeFinder::find_cone(
   cv::Mat & in_image, 
   sensor_msgs::msg::CameraInfo & camera_info,
-  std::vector<cv::Point> & cone_coords, 
+  std::vector<Point> & cone_coords, 
   std::vector<double> & cone_x,
-  vision_msgs::msg::BoundingBox2DArray & BB_array, int dev_mode)
+  vision_msgs::msg::BoundingBox2DArray & BB_array)
 {
   // https://github.com/MicrocontrollersAndMore/Traffic_Cone_Detection_Visual_Basic/blob/master/frmMain.vb
     cv::Mat fullImageHSV;
@@ -117,7 +113,7 @@ bool CoreConeFinder::find_cone(
     std::vector<cv::Point> poly;
     std::vector<cv::Point> hull;
     std::vector<std::vector<cv::Point>> hull_refined;
-    if (dev_mode>5){std::cout<<"contour size "<<contours.size()<<"\n";}
+    if (params_.dev_mode_>5){std::cout<<"contour size "<<contours.size()<<"\n";}
     for (size_t i = 0; i < contours.size(); ++i) {
       // approx poly need to be tune  
       if (contours[i].size()>20){
@@ -138,7 +134,7 @@ bool CoreConeFinder::find_cone(
     // TODO UNDERSTAND IF WE CAN SLIT
     for( size_t i = 0; i< hull_refined.size(); i++ )
     {
-      if (dev_mode>5)
+      if (params_.dev_mode_>5)
       {
         cv::drawContours( in_image, contours, (int)i, CV_RGB(255,255,0), 2, cv::LINE_8, hierarchy, 0 );
         cv::drawContours( in_image, hull_refined, (int)i, CV_RGB(255,0,255) );
@@ -148,7 +144,7 @@ bool CoreConeFinder::find_cone(
       cv::Point p(m.m10/m.m00, m.m01/m.m00);    
       cv::Rect boundRect = cv::boundingRect( hull_refined[i] );
       double x = (p.x - camera_info.k[2])/camera_info.k[0];
-      if (dev_mode>5)
+      if (params_.dev_mode_>5)
       {
         cv::circle(in_image, p, 10, CV_RGB(255,0,0));
         cv::rectangle( in_image, boundRect.tl(), boundRect.br(), CV_RGB(0,0,255), 2 );
@@ -163,7 +159,7 @@ bool CoreConeFinder::find_cone(
       BB.size_y = boundRect.height;
       BB_array.boxes.push_back(BB);
     }
-    if (dev_mode>5)
+    if (params_.dev_mode_>5)
     {
       cv::namedWindow("cone window");
       cv::imshow("cone window", in_image);

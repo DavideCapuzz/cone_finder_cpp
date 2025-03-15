@@ -28,6 +28,10 @@
 #ifndef CoreConeFinder_H
 #define CoreConeFinder_H
 
+struct ConeFinderParams{
+  int dev_mode_{0};
+};
+
 class CoreConeFinder
 {
 public:
@@ -37,23 +41,24 @@ public:
   geometry_msgs::msg::Point update(
     cv::Mat in_image, 
     sensor_msgs::msg::CameraInfo & camera_info, int r_bot, int c_bot,
-    vision_msgs::msg::BoundingBox2DArray & BB_array, int dev_mode=0);
+    vision_msgs::msg::BoundingBox2DArray & BB_array=0);
 
   geometry_msgs::msg::Point find_cone_pose(int r_bot, int c_bot, 
-  std::vector<double> & cone_x, int dev_mode);
+  std::vector<double> & cone_x);
 
   bool find_cone(
   cv::Mat & in_image, 
   sensor_msgs::msg::CameraInfo & camera_info,
-  std::vector<cv::Point> & cone_coords, 
+  std::vector<Point> & cone_coords, 
   std::vector<double> & cone_x,
-  vision_msgs::msg::BoundingBox2DArray & BB_array, int dev_mode);
+  vision_msgs::msg::BoundingBox2DArray & BB_array);
 
   bool pointingUp(std::vector<cv::Point> hull_in);
   bool find_cone(cv::Mat in_image);
   ToolsCam tools_{};
   OccupancyGrid oc_{};
   BotOdom odom_{};
+  ConeFinderParams params_{};
 };
 
 #endif

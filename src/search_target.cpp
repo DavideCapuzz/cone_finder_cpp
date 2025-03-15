@@ -97,12 +97,12 @@ void SearchTarget::continuosCallback()
   // check if the messages is update
   if (continuos_call_back_ && common_.check_time(msgs_time_)) // TODO: check if all the information are updated
   {
-    p_target_ = core_.update(
-        r_bot_, c_bot_, core_.odom_.rotation_angle_);
-    if (p_target_.x == 0 && p_target_.y == 0)
+    bool result;
+    std::tie(result, p_target_) = core_.update(bot_, oc_, odom_, params_);
+    if (!result)
     {
-      p_target_.x = p_target_.x + 1.5 * cos((core_.odom_.rotation_angle_ - 90) * M_PI / 180.0);
-      p_target_.y = p_target_.y + 1.5 * sin((core_.odom_.rotation_angle_ - 90) * M_PI / 180.0);
+      p_target_.x = p_target_.x + 1.5 * cos((odom_.rotation_angle_ - 90) * M_PI / 180.0);
+      p_target_.y = p_target_.y + 1.5 * sin((odom_.rotation_angle_ - 90) * M_PI / 180.0);
     }
     std::vector<geometry_msgs::msg::Point> pp;
     pp.push_back(p_target_);
@@ -114,7 +114,7 @@ void SearchTarget::costmap_cb(const nav_msgs::msg::OccupancyGrid::SharedPtr msg_
 {
   if (msg_in->info.height != 0 && msg_in->info.width != 0)
   {
-    core_.oc_ = {*msg_in};
+    oc_ = {*msg_in};
   }
   msgs_time_[0] = std::chrono::system_clock::now();
 }
@@ -134,11 +134,11 @@ void SearchTarget::odom_cb(const nav_msgs::msg::Odometry::SharedPtr msg_in)
 
   // https://www.euclideanspace.com/maths/geometry/rotations/conversions/quaternionToAngle/index.htm
   geometry_msgs::msg::TransformStamped transformCamera;
-  core_.odom_ = {*msg_in};
+  odom_ = {*msg_in};
 
   try
   {
-    std::tie(r_bot_, c_bot_) = tools_.position_2_map(core_.odom_.pose_.position, core_.oc_.map_res_, core_.oc_.map_x0_, core_.oc_.map_y0_);
+    bot_ = tools_.position_2_map(odom_.pose_.position, oc_.map_res_, oc_.map_x0_, oc_.map_y0_);
     // RCLCPP_INFO(this->get_logger(), "rot %f or %f", rotation_angle_, bot_pose_.orientation.w);
   }
   catch (tf2::TransformException &ex)
@@ -159,7 +159,7 @@ void SearchTarget::get_search_target_server(const std::shared_ptr<interfaces::sr
     response->target = p_target_;
     if (params_.dev_mode_ > 1)
     {
-      RCLCPP_INFO(this->get_logger(), "%f %f", p_target_.x * core_.oc_.map_res_ + core_.oc_.map_x0_, p_target_.y * core_.oc_.map_res_ + core_.oc_.map_y0_);
+      RCLCPP_INFO(this->get_logger(), "%f %f", p_target_.x * oc_.map_res_ + oc_.map_x0_, p_target_.y * oc_.map_res_ + oc_.map_y0_);
     }
   }
   else
@@ -177,8 +177,8 @@ void SearchTarget::save_status_server(const std::shared_ptr<interfaces::srv::Sav
 {
   if (common_.check_time(msgs_time_))
   {
-    common_.WriteMapToYaml(request->name, core_.oc_.grid_);
-    common_.WritePoseToYaml(request->name, core_.odom_.pose_);
+    common_.WriteMapToYaml(request->name, oc_.grid_);
+    common_.WritePoseToYaml(request->name, odom_.pose_);
     // RCLCPP_INFO(this->get_logger(), " founded !!");
     response->result = true;
   }

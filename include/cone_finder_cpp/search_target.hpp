@@ -78,9 +78,7 @@ private:
   // geometry_msgs::msg::Pose bot_pose_{}, goal_pose_{};
   geometry_msgs::msg::Pose goal_pose_{};
 
-  int r_bot_{0}; // row the base link of the robot
-  int c_bot_{0}; // column the base link of the robot
-  // float rotation_angle_{0.0};     // heading of the robot
+  Point bot_{};
 
   // internal data
   ToolsCam tools_{}; // tools cone finder node
@@ -93,9 +91,12 @@ private:
   geometry_msgs::msg::Point p_target_{}; // next target point
 
   bool continuos_call_back_{true}; // if true the continuos callback will work
-  SearchTargetParams params_{};
 
   rclcpp::Publisher<sensor_msgs::msg::CompressedImage>::SharedPtr pub_visualize_image_;
+
+  SearchTargetParams params_{};
+  OccupancyGrid oc_{};
+  BotOdom odom_{};
 };
 
 #endif
