@@ -22,7 +22,7 @@ std::tuple<bool, geometry_msgs::msg::Point> CoreSearchTarget::update(
   cv::Mat map_image = oc.walls_.to_image();
 
   // find the closet point, 1 right, -1 left
-  Point p_lateral = tools_.rotate_point_on_image(Point(bot.x_, params.search_dir_ * 500), bot, odom.rotation_angle_);
+  Point p_lateral = tools_.rotate_point_on_image(Point(bot.x_,bot.y_ + params.search_dir_ * 500), bot, odom.rotation_angle_);
   // find point in front of the direction of the robot
   Point p_front = tools_.rotate_point_on_image(Point(bot.x_, bot.y_ + 5), bot, odom.rotation_angle_ - 90);
   if (oc.p_100_.size() > 0) // check if the cost map has some obstacles

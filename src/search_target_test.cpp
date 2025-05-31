@@ -65,7 +65,7 @@ int main(int argc, char *argv[])
   params_.distance_wall_ = 10;
   params_.search_dir_ = 1; // 1 right, -1 left direction of research
   params_.angle_offset_ = 0.0;
-  params_.zoom_ = 10.0;
+  params_.zoom_ = 5.0;
   params_.kernel_.set_kernel(Matrix<5>{
       {0.0, 0.0, 0.0, 0.0, 0.0,
        0.0, 0.0, 0.0, 0.0, 0.0,

@@ -629,13 +629,11 @@ public:
           walls_(width_, height_)
     {
         // Convert from occupancy grid to image
-        std::cout << "width_" << width_ << "   height_" << height_ << "\n";
         for (int i{0}; i < width_ * height_; ++i)
         {
             if (grid_.data[i] != 0)
             {
                 Point p = tools_.grid_2_point(i, width_, height_);
-                // std::cout<<"i"<<i<<"   p.x_"<<p.x_<<"   p.y_"<<p.y_<< "  width" << width_ << "   height" << height_ << "\n";
                 occgrid_(p.x_, p.y_) = grid_.data[i];
                 if (grid_.data[i] == 100)
                 {

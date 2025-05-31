@@ -56,15 +56,17 @@ int main(int argc, char* argv[])
       0.000000, 0.000000 ,1.000000 ,0};
     camera_info_.header.frame_id="Camera";
 
+  int dev_mode_ = 10;
+  double zoom_ = 5.0;
+
   CoreConeFinder core_;
+  core_.set_params(dev_mode_, zoom_);
   nav_msgs::msg::Odometry odom;
   odom.pose.pose = bot_pose_;
   BotOdom odom_ = {odom};
   // setup data
   OccupancyGrid oc_ = {map};  
   auto p_cam_ =  tools_.position_2_map(odom_.pose_.position, oc_.map_res_, oc_.map_x0_, oc_.map_y0_);
-
-  int dev_mode_ = 10;
 
   geometry_msgs::msg::Point p_target_{};  
   vision_msgs::msg::BoundingBox2DArray BB_array;

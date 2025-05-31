@@ -24,12 +24,15 @@
 #include <boost/numeric/ublas/io.hpp>
 
 #include "cone_finder_cpp/tools.hpp"
+#include "common/common.hpp"
+#include <tuple>
 
 #ifndef CoreConeFinder_H
 #define CoreConeFinder_H
 
 struct ConeFinderParams{
   int dev_mode_{0};
+  double zoom_{1.0};
 };
 
 class CoreConeFinder
@@ -40,8 +43,9 @@ public:
  
   geometry_msgs::msg::Point update(
     cv::Mat &in_image, sensor_msgs::msg::CameraInfo & camera_info, Point &p_cam, OccupancyGrid &oc, BotOdom &odoms,
-    vision_msgs::msg::BoundingBox2DArray & BB_array
-    );
+    vision_msgs::msg::BoundingBox2DArray & BB_array);
+  
+  void set_params(int dev_mode, double zoom);
 
 private:
   geometry_msgs::msg::Point find_cone_pose(Point &p_cam, std::vector<double> & cone_x, OccupancyGrid &oc, BotOdom &odom);
@@ -52,7 +56,8 @@ private:
   bool pointingUp(std::vector<cv::Point> &hull_in);
   // bool find_cone(cv::Mat &in_image);
   ToolsCam tools_{};
-  ConeFinderParams params_{};  //TBD
+  ConeFinderParams params_{};
+  Common common_{};
 };
 
 #endif

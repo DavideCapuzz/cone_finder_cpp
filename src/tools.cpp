@@ -50,14 +50,15 @@ cv::Point ToolsCam::grid_2_cvpoint(int grid_index, size_t grid_width, size_t gri
 {
   // convert occupacy grid point to image
   // + 0.5 for automatic rounding
-  return cv::Point(static_cast<int>(grid_index % grid_width + 0.5), static_cast<int>(grid_index / grid_width + 0.5));
+  return cv::Point(static_cast<int>(grid_index % grid_width + 0.5), grid_height -1 -static_cast<int>(grid_index / grid_width + 0.5));
 }
 
 Point ToolsCam::grid_2_point(int grid_index, size_t grid_width, size_t grid_height)
 {
   // convert occupacy grid point to image
   // + 0.5 for automatic rounding
-  return Point(static_cast<int>(grid_index % grid_width + 0.5), static_cast<int>(grid_index / grid_width + 0.5));
+  // row major order matrix so we start from the top position
+  return Point(static_cast<int>(grid_index % grid_width + 0.5), grid_height -1 - static_cast<int>(grid_index / grid_width + 0.5));
 }
 
 cv::Point ToolsCam::cvpoint_2_grid(cv::Point p, size_t grid_height)
